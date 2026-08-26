@@ -10,6 +10,7 @@ import java.util.*;
 public class RaceData {
     public Player player;
 
+    public boolean racing = false;
     public int ranking = -1;
     public boolean disqualified = false;
     public int checkpointIndex = 0;

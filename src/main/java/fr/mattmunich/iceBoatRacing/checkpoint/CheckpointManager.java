@@ -245,6 +245,9 @@ public class CheckpointManager {
         }
 
         for (Checkpoint checkpoint : toAdd) race.addCheckpoint(checkpoint);
+        Vector normal = race.getCheckpoints().getFirst().getNormal();
+        float yaw = (float) Math.toDegrees(Math.atan2(-normal.getX(), normal.getZ()));
+        race.setStartRotation(yaw);
         return true;
     }
 

@@ -17,6 +17,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,6 +34,7 @@ public class RaceManager {
     public final PitBoxManager pitBoxManager;
     public final List<Race> races = new ArrayList<>();
     public final List<Race> activeRaces = new ArrayList<>();
+
     /**
      * A map that contains the races that failed to load on startup. <br/>
      * Format: {@code Map<worldName, raceName>}
@@ -51,12 +53,9 @@ public class RaceManager {
      * @return The {@link Race} with the matching name
      */
     public Race getRace(String raceName) {
-        for (Race race : races) {
-            if (race.getName().equalsIgnoreCase(raceName)) {
-                return race;
-            }
-        }
-        return null;
+        return races.stream().filter(
+                r -> r.getName().equalsIgnoreCase(raceName)
+        ).findFirst().orElse(null);
     }
 
     /**
@@ -66,7 +65,7 @@ public class RaceManager {
         if (races.isEmpty()) {
             main.warn("No races found, therefore none were saved.");
         } else {
-            for (Race race : races) {
+            for (Race race : new ArrayList<>(races)) {
                 try {
                     race.saveConfig();
                 } catch (IOException e) {
@@ -91,9 +90,7 @@ public class RaceManager {
         int loadedRaces = 0;
 
         if(!races.isEmpty()) {
-            for (Race race : races) {
-                try { race.end(false); } catch (Exception ignored) {}
-            }
+            races.forEach(race -> {try { race.end(false); } catch (Exception ignored) {}});
             races.clear();
         }
         File racesFolder = new File(main.getDataFolder(), "races");
@@ -204,8 +201,7 @@ public class RaceManager {
         int loadedRaces = 0;
 
         if(!races.isEmpty()) {
-            List<Race> raceListCopy = new ArrayList<>(races);
-            for (Race race : raceListCopy) {
+            for (Race race : new ArrayList<>(races)) {
                 boolean success = race.update();
                 if(success) main.log("Race " + race.getName() + " has been updated");
                 else main.warn("Could not update race " + race.getName() + ", see error above.");
@@ -214,7 +210,7 @@ public class RaceManager {
             }
             main.log("Updated " + loadedRaces + " race(s)!");
         } else {
-            main.warn("No races updated.");
+            main.warn("No races updated (none were found).");
         }
     }
 
@@ -235,6 +231,7 @@ public class RaceManager {
         config.set("name", race.getName());
         config.set("world", race.getWorld().getName());
         config.set("lapCount", race.getLapCount());
+        config.set("startRotation", race.getStartRotation());
         config.set("requiredPitStops", race.getRequiredPitStops());
         config.set("startRotation", 0);
 
@@ -370,6 +367,24 @@ public class RaceManager {
         config.save(file);
     }
 
+    //RaceData management
+
+    public Map<UUID, RaceData> getRacers() {
+        Map<UUID, RaceData> allRacers = new HashMap<>();
+        getRaces().forEach(race -> allRacers.putAll(race.racers));
+        return allRacers;
+    }
+
+    public RaceData getRacer(@NotNull UUID uniqueId) {
+        return getRacers().get(uniqueId);
+    }
+
+    public boolean isRacing(Player player) {
+        return getRacers().containsKey(player.getUniqueId()) && getRacers().get(player.getUniqueId()).racing;
+    }
+
+    //Race start/end/...
+
     /**
      * Starts the inputted {@code race}.
      * @param race The race to start
@@ -464,20 +479,23 @@ public class RaceManager {
         Map<UUID, RaceData> racers = race.racers;
         Player owner = Bukkit.getPlayer(car.getOwner());
         if (owner == null) return;
+        RaceData racer = new RaceData(owner);
 
         owner.setGameMode(GameMode.ADVENTURE);
         carManager.spawnCar(race, car, owner);
-        racers.put(owner.getUniqueId(),new RaceData(owner));
-        racers.get(owner.getUniqueId()).car = car;
-        racers.get(owner.getUniqueId()).checkpointIndex = -1;
-        racers.get(owner.getUniqueId()).lapCount = 0;
-        racers.get(owner.getUniqueId()).lapTime = 0;
-        racers.get(owner.getUniqueId()).startTime = 0;
-        racers.get(owner.getUniqueId()).race = race;
-        racers.get(owner.getUniqueId()).player = owner;
+
+        racer.racing = true;
+        racer.car = car;
+        racer.checkpointIndex = -1;
+        racer.lapCount = 0;
+        racer.lapTime = 0;
+        racer.startTime = 0;
+        racer.race = race;
+        racer.player = owner;
 
         main.liveSidebar.getScore(owner.getName()).resetScore();
-        race.racing.add(racers.get(owner.getUniqueId()));
+        race.racing.add(racer);
+        racers.put(owner.getUniqueId(), racer);
     }
 
     /**
@@ -574,5 +592,4 @@ public class RaceManager {
             }
         }
     }
-
 }

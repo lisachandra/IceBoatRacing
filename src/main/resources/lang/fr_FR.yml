@@ -154,6 +154,11 @@ race:
   updatedLapCount: "§bLe nombre de tours de la course §3%race%§b a été défini à §3%lapCount%§b."
   invalidLapCount: "§cLe nombre de tours entré est invalide."
 
+  #Start rotation
+  currentStartRotation: "§bL'angle de départ pour la course %race% est défini à §3%startRotation%°§b."
+  updatedStartRotation: "§bL'angle de départ pour la course §3%race%§b a été défini à §3%startRotation%°§b."
+  invalidStartRotation: "§cL'angle de départ entré est invalide. §8Utilisez: §70§8-§7360§8 ou §7north§8/§7west§8/§7south§8/§7east"
+
   #Pit stops
   currentPitStops: "§bLe nombre d'arrêts au stand obligatoires pour la course %race% est défini à §3%pitStops%§b."
   updatedPitStops: "§bLe nombre d'arrêts au stand obligatoires pour la course §3%race%§b a été défini à §3%pitStops%§b."

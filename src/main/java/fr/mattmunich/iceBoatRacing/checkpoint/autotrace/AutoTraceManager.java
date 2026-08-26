@@ -83,7 +83,7 @@ public class AutoTraceManager {
 
         session.samplingTask = Bukkit.getScheduler().runTaskTimer(main, () -> {
             if (!p.isOnline()) {
-                stop(p);
+                cancel(p);
                 return;
             }
 

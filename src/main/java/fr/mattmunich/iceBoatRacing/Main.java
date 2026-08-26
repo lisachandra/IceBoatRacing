@@ -1,9 +1,6 @@
 package fr.mattmunich.iceBoatRacing;
 
-import fr.mattmunich.iceBoatRacing.cars.CarCommand;
-import fr.mattmunich.iceBoatRacing.cars.CarCreator;
-import fr.mattmunich.iceBoatRacing.cars.CarListener;
-import fr.mattmunich.iceBoatRacing.cars.CarManager;
+import fr.mattmunich.iceBoatRacing.cars.*;
 import fr.mattmunich.iceBoatRacing.checkpoint.autotrace.AutoTraceManager;
 import fr.mattmunich.iceBoatRacing.listeners.Connection;
 import fr.mattmunich.iceBoatRacing.listeners.WorldLoad;
@@ -45,9 +42,9 @@ public final class Main extends JavaPlugin {
 
     //Config
     public static GameMode RACING_GAMEMODE;
-    public static Boolean ENFORCE_RACING_GAMEMODE;
-    public static Boolean SPECTATE_ON_FINISH;
-    public static Boolean REMOVE_CAR_ON_LOGOUT;
+    public static boolean ENFORCE_RACING_GAMEMODE;
+    public static boolean SPECTATE_ON_FINISH;
+    public static boolean REMOVE_CAR_ON_LOGOUT;
 
     @Override
     public void onEnable() {
@@ -55,6 +52,8 @@ public final class Main extends JavaPlugin {
         Component name = MiniMessage.miniMessage().deserialize("<b><gradient:#8DABF3:#10CA9A>Ice Boat Racing</gradient></b>");
         String stringName = l(name);
         log("§bEnabling " + stringName + " §3v" + version + "§b...");
+
+        loadPacketEvents();
 
         loadConfigs();
 
@@ -72,6 +71,15 @@ public final class Main extends JavaPlugin {
 
         log("Done enabling!");
 
+    }
+
+    private void loadPacketEvents() {
+        if (Bukkit.getPluginManager().getPlugin("packetevents") != null) {
+            BoatCollisionSuppressor.register(raceManager);
+            log("PacketEvents detected — boat collision fix enabled.");
+        } else {
+            warn("PacketEvents not found — boat collision fix won't work!");
+        }
     }
 
     private void registerListeners() {

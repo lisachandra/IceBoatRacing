@@ -154,6 +154,11 @@ race:
   updatedLapCount: "§bThe lap count for race §3%race%§b has been set to §3%lapCount%§b."
   invalidLapCount: "§cThe lap count entered is invalid."
 
+  #Start rotation
+  currentStartRotation: "§bThe starting angle for the race %race% is set to §3%startRotation%°§b."
+  updatedStartRotation: "§bThe starting angle for the race §3%race%§b has been set to §3%startRotation%°§b."
+  invalidStartRotation: "§cThe entered starting angle is invalid. §8Use: §70§8-§7360§8 or §7north§8/§7west§8/§7south§8/§7east"
+
   #Pit stops
   currentPitStops: "§bThe number of mandatory pit stops for race %race% is set to §3%pitStops%§b."
   updatedPitStops: "§bThe number of mandatory pit stops for race §3%race%§b has been set to §3%pitStops%§b."

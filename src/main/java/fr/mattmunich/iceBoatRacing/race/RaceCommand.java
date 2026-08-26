@@ -126,139 +126,166 @@ public class RaceCommand implements BasicCommand {
                 else sender.sendMessage(getMessage("error.unknown"));
             });
         } else if (args.length >= 1 && args[0].equalsIgnoreCase("setLapCount")) {
-            Race race;
-            boolean definedRaceName = false;
-            if(raceManager.races.size() != 1 || args.length == 3) {
-                if(args.length < 2 || args.length > 3) {
-                    sender.sendMessage(getMessage("race.help"));
-                    return;
-                }
-                String raceName = args[1];
-                race = raceManager.getRace(raceName);
-                definedRaceName = true;
-            } else {
-                race = raceManager.races.getFirst();
-            }
-            if(race == null) {
-                sender.sendMessage(getMessage("race.notFound"));
-                return;
-            }
+            ParsedResult parsedResult = parseRace(args, sender);
+            if (parsedResult == null) return;
 
-            if (definedRaceName) {
-                if(args.length == 2) {
-                    sender.sendMessage(getMessage("race.currentLapCount", Messages.formatArguments(
-                            "race", race.getName(),
-                            "lapCount", race.getLapCount()
-                    )));
-                    return;
-                }
+            int valueArgIndex = parsedResult.definedRaceName() ? 2 : 1;
+            handleLapCount(args, valueArgIndex, sender, parsedResult.race());
+        } else if (args.length >= 1 && args[0].equalsIgnoreCase("setStartRotation")) {
+            ParsedResult parsedResult = parseRace(args, sender);
+            if (parsedResult == null) return;
 
-                int lapCount;
-                try {
-                    lapCount = Integer.parseInt(args[2]);
-                } catch (NumberFormatException e) {
-                    sender.sendMessage(getMessage("race.invalidLapCount"));
-                    return;
-                }
-
-                Bukkit.getScheduler().runTask(main, () -> {
-                    race.setLapCount(lapCount);
-                    try {
-                        race.saveConfig();
-                    } catch (IOException e) {
-                        sender.sendMessage(getMessage("error.unkown"));
-                        return;
-                    }
-                    sender.sendMessage(getMessage("race.updatedLapCount", Messages.formatArguments(
-                            "race", race.getName(),
-                            "lapCount", race.getLapCount()
-                    )));
-                });
-            } else {
-                if(args.length == 1) {
-                    sender.sendMessage(getMessage("race.currentLapCount", Messages.formatArguments(
-                            "race", race.getName(),
-                            "lapCount", race.getLapCount()
-                    )));
-                    return;
-                }
-
-                int lapCount;
-                try {
-                    lapCount = Integer.parseInt(args[1]);
-                } catch (NumberFormatException e) {
-                    sender.sendMessage(getMessage("race.invalidLapCount"));
-                    return;
-                }
-
-                Bukkit.getScheduler().runTask(main, () -> {
-                    race.setLapCount(lapCount);
-                    try {
-                        race.saveConfig();
-                    } catch (IOException e) {
-                        sender.sendMessage(getMessage("error.unkown"));
-                        return;
-                    }
-                    sender.sendMessage(getMessage("race.updatedLapCount", Messages.formatArguments(
-                            "race", race.getName(),
-                            "lapCount", race.getLapCount()
-                    )));
-                });
-            }
+            int valueArgIndex = parsedResult.definedRaceName() ? 2 : 1;
+            handleStartRotation(args, valueArgIndex, sender, parsedResult.race());
         } else if (args.length >= 1 && args[0].equalsIgnoreCase("setPitStops")) {
-            Race race;
-            boolean definedRaceName = false;
-            if (raceManager.races.size() != 1 || args.length == 3) {
-                if (args.length < 2 || args.length > 3) {
-                    sender.sendMessage(getMessage("race.help"));
-                    return;
-                }
-                String raceName = args[1];
-                race = raceManager.getRace(raceName);
-                definedRaceName = true;
-            } else {
-                race = raceManager.races.getFirst();
-            }
-            if (race == null) {
-                sender.sendMessage(getMessage("race.notFound"));
-                return;
-            }
+            ParsedResult parsedResult = parseRace(args, sender);
+            if (parsedResult == null) return;
 
-            Race finalRace = race;
-            int valueIndex = definedRaceName ? 2 : 1;
+            Race finalRace = parsedResult.race();
+            int valueArgIndex = parsedResult.definedRaceName() ? 2 : 1;
 
-            if (args.length <= valueIndex) {
-                sender.sendMessage(getMessage("race.currentPitStops", Messages.formatArguments(
-                        "race", finalRace.getName(),
-                        "pitStops", finalRace.getRequiredPitStops()
-                )));
-                return;
-            }
-
-            int pitStops;
-            try {
-                pitStops = Integer.parseInt(args[valueIndex]);
-            } catch (NumberFormatException e) {
-                sender.sendMessage(getMessage("race.invalidPitStops"));
-                return;
-            }
-
-            Bukkit.getScheduler().runTask(main, () -> {
-                finalRace.setRequiredPitStops(pitStops);
-                try {
-                    finalRace.saveConfig();
-                } catch (IOException e) {
-                    sender.sendMessage(getMessage("error.unknown"));
-                    return;
-                }
-                sender.sendMessage(getMessage("race.updatedPitStops", Messages.formatArguments(
-                        "race", finalRace.getName(),
-                        "pitStops", finalRace.getRequiredPitStops()
-                )));
-            });
+            handlePitStops(args, valueArgIndex, sender, finalRace);
         } else {
             sender.sendMessage(getMessage("race.help"));
         }
+    }
+
+    private void handlePitStops(String @NonNull [] args, int valueArgIndex, CommandSender sender, Race finalRace) {
+        if (args.length <= valueArgIndex) {
+            sender.sendMessage(getMessage("race.currentPitStops", Messages.formatArguments(
+                    "race", finalRace.getName(),
+                    "pitStops", finalRace.getRequiredPitStops()
+            )));
+            return;
+        }
+
+        int pitStops;
+        try {
+            pitStops = Integer.parseInt(args[valueArgIndex]);
+        } catch (NumberFormatException e) {
+            sender.sendMessage(getMessage("race.invalidPitStops"));
+            return;
+        }
+
+        Bukkit.getScheduler().runTask(main, () -> {
+            finalRace.setRequiredPitStops(pitStops);
+            try {
+                finalRace.saveConfig();
+            } catch (IOException e) {
+                sender.sendMessage(getMessage("error.unknown"));
+                return;
+            }
+            sender.sendMessage(getMessage("race.updatedPitStops", Messages.formatArguments(
+                    "race", finalRace.getName(),
+                    "pitStops", finalRace.getRequiredPitStops()
+            )));
+        });
+    }
+
+    private @Nullable ParsedResult parseRace(String @NonNull [] args, CommandSender sender) {
+        Race race;
+        boolean definedRaceName = false;
+        if(raceManager.races.size() != 1 || args.length == 3) {
+            if(args.length < 2 || args.length > 3) {
+                sender.sendMessage(getMessage("race.help"));
+                return null;
+            }
+            String raceName = args[1];
+            race = raceManager.getRace(raceName);
+            definedRaceName = true;
+        } else {
+            race = raceManager.races.getFirst();
+        }
+        if(race == null) {
+            sender.sendMessage(getMessage("race.notFound"));
+            return null;
+        }
+        return new ParsedResult(race, definedRaceName);
+    }
+
+    private record ParsedResult(Race race, boolean definedRaceName) { }
+
+    private void handleLapCount(String @NonNull [] args, int valueArgIndex, CommandSender sender, Race race) {
+        if(args.length == valueArgIndex) {
+            sender.sendMessage(getMessage("race.currentLapCount", Messages.formatArguments(
+                    "race", race.getName(),
+                    "lapCount", race.getLapCount()
+            )));
+            return;
+        }
+
+        int lapCount;
+        try {
+            lapCount = Integer.parseInt(args[valueArgIndex]);
+        } catch (NumberFormatException e) {
+            sender.sendMessage(getMessage("race.invalidLapCount"));
+            return;
+        }
+
+        Bukkit.getScheduler().runTask(main, () -> {
+            race.setLapCount(lapCount);
+            try {
+                race.saveConfig();
+            } catch (IOException e) {
+                sender.sendMessage(getMessage("error.unkown"));
+                return;
+            }
+            sender.sendMessage(getMessage("race.updatedLapCount", Messages.formatArguments(
+                    "race", race.getName(),
+                    "lapCount", race.getLapCount()
+            )));
+        });
+    }
+
+    private void handleStartRotation(String @NonNull [] args, int valueArgIndex, CommandSender sender, Race race) {
+        if(args.length == valueArgIndex) {
+            sender.sendMessage(getMessage("race.currentStartRotation", Messages.formatArguments(
+                    "race", race.getName(),
+                    "startRotation", race.getStartRotation()
+            )));
+            return;
+        }
+
+        float startRotation;
+        String value = args[valueArgIndex];
+        if (Character.isDigit(value.charAt(0))) {
+            try {
+                startRotation = Float.parseFloat(args[valueArgIndex]);
+            } catch (NumberFormatException e) {
+                sender.sendMessage(getMessage("race.invalidStartRotation"));
+                return;
+            }
+        } else {
+            switch (args[valueArgIndex]) {
+                case "north", "n" -> startRotation = 180;
+                case "west", "w" -> startRotation = 90;
+                case "south", "s" -> startRotation = 0;
+                case "east", "e" -> startRotation = 270;
+                default -> {
+                    sender.sendMessage(getMessage("race.invalidStartRotation"));
+                    return;
+                }
+            }
+        }
+
+        if(startRotation < -180 || startRotation > 360) {
+            sender.sendMessage(getMessage("race.invalidStartRotation"));
+            return;
+        }
+
+        Bukkit.getScheduler().runTask(main, () -> {
+            race.setStartRotation(startRotation);
+            try {
+                race.saveConfig();
+            } catch (IOException e) {
+                sender.sendMessage(getMessage("error.unkown"));
+                return;
+            }
+            sender.sendMessage(getMessage("race.updatedStartRotation", Messages.formatArguments(
+                    "race", race.getName(),
+                    "startRotation", race.getStartRotation()
+            )));
+        });
     }
 
     @Override
@@ -270,7 +297,7 @@ public class RaceCommand implements BasicCommand {
             races.forEach((race) -> raceList.add(race.getName()));
         } else raceList = List.of("§oNo races defined");
 
-        List<String> baseList = List.of("start","prepare","end","create","delete", "setLapCount","setPitStops");
+        List<String> baseList = List.of("start","prepare","end","create","delete", "setLapCount","setPitStops","setStartRotation");
         if(args.length==0) {
             return baseList;
         } else if(args.length==1) {
@@ -289,6 +316,7 @@ public class RaceCommand implements BasicCommand {
                     || args[0].equalsIgnoreCase("delete")
                     || args[0].equalsIgnoreCase("setLapCount")
                     || args[0].equalsIgnoreCase("setPitStops")
+                    || args[0].equalsIgnoreCase("setStartRotation")
             )
         ) {
             return raceList;
@@ -297,6 +325,8 @@ public class RaceCommand implements BasicCommand {
                 return List.of("§7<lapCount>");
             } else if(args[0].equalsIgnoreCase("setPitStops")) {
                 return List.of("§7<requiredPitStops>");
+            } else if(args[0].equalsIgnoreCase("setStartRotation")) {
+                return List.of("§7<startRotation>", "0-360", "north", "west", "south", "east");
             } else {
                 return Collections.emptyList();
             }

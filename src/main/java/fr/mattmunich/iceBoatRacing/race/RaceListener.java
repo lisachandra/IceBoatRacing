@@ -242,7 +242,8 @@ public class RaceListener implements Listener {
         Race race = data.race;
         Map<Integer, RaceData> finished = race.rankings;
         race.racing.remove(data);
-        data.endTime= now;
+        data.endTime = now;
+        data.racing = false;
         race.rankings.put(finished.size(), data);
 
         int ranking = finished.size();

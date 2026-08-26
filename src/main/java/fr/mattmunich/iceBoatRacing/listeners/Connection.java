@@ -16,6 +16,10 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+
 import static fr.mattmunich.iceBoatRacing.Main.REMOVE_CAR_ON_LOGOUT;
 import static fr.mattmunich.iceBoatRacing.Messages.formatArguments;
 import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
@@ -89,10 +93,10 @@ public class Connection implements Listener {
         Player p = e.getPlayer();
         e.quitMessage(getMessage("noPrefix.quit",formatArguments("player", p.getName())));
 
-
-        for (Race race : raceManager.activeRaces) {
+        for (Race race : new ArrayList<>(raceManager.activeRaces)) {
             RaceData racer = race.racers.get(p.getUniqueId());
             if(racer == null) return;
+            racer.racing = false;
             Car car = racer.car;
             if (car != null) {
                 race.racing.remove(racer);
@@ -110,6 +114,7 @@ public class Connection implements Listener {
                 main.liveSidebar.getScore(p.getName()).resetScore();
             }
 
+            //Auto end race if the last racer leaves
             if(race.racing.isEmpty()) {
                 try {
                     race.end(true);

@@ -20,15 +20,19 @@ import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
 public class Race {
 
     private RaceManager raceManager;
+    YamlConfiguration config = null;
+
     final String name;
     final World world;
-    float startRotation;
-    YamlConfiguration config = null;
+
+    float startRotation = 0;
     int lapCount = 10;
     int requiredPitStops = 0;
+
     final List<Checkpoint> checkpoints = new ArrayList<>();
     final List<Car> cars = new ArrayList<>();
     public final Map<UUID, RaceData> racers = new HashMap<>();
+
     /**
      * List of the racers that are actively racing
      * (-> those who have finished the race are not included)

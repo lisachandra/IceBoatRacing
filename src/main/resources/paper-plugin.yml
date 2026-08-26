@@ -10,6 +10,13 @@ prefix: "IceBoatRacing"
 provides:
   - iceboatracing
   - ibr
+dependencies:
+  server:
+    packetevents:
+      required: false
+      load: AFTER
+      join-classpath: true
+
 permissions:
   iceboatracing.*:
     description: All the permissions of the plugin
