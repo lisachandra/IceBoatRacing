@@ -19,10 +19,12 @@ dependencies:
 
 permissions:
   iceboatracing.*:
+    default: op
     description: All the permissions of the plugin
     children:
       iceboatracing.command.*: true
   iceboatracing.command.*:
+    default: op
     description: The permission for all commands
     children:
       iceboatracing.command.checkpoint: true
@@ -31,29 +33,14 @@ permissions:
       iceboatracing.command.plugin: true
   iceboatracing.command.race:
     description: The permission for the /race command
-    default: false
+    default: op
   iceboatracing.command.car:
     description: The permission for the /car command
-    default: false
+    default: op
   iceboatracing.command.checkpoint:
     description: The permission for the /checkpoint command
-    default: false
+    default: op
   iceboatracing.command.plugin:
     description: The permission for the /iceboatracing or /ibr command
-    default: false
-  iceboatracing.race.*:
-    description: The permission to manage a race entirely
-    children:
-      iceboatracing.race.create: true
-      iceboatracing.race.checkpoints: true
-      iceboatracing.race.cars: true
-  iceboatracing.race.create:
-    description: The permission to create a race
-    default: false
-  iceboatracing.race.checkpoints:
-    description: The permission to manage a race's checkpoints
-    default: false
-  iceboatracing.race.cars:
-    description: The permission to manage a race's cars
-    default: false
+    default: op
 
