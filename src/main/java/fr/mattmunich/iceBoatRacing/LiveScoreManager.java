@@ -45,7 +45,7 @@ public class LiveScoreManager {
 
     public void updateRacer(Racer racer) {
         Score s = liveScore.getScore(entryFormat(racer));
-        s.setScore(((racer.lapCount-1) * racer.getRace().getCheckpoints().size()) + racer.checkpointIndex);
+        s.setScore(racer.getScore());
         s.customName(formatScore(racer));
     }
 

@@ -22,8 +22,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 
-import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
-
 public final class Main extends JavaPlugin {
     public static String version;
 
@@ -62,8 +60,6 @@ public final class Main extends JavaPlugin {
         loadManagers();
 
         loadCreators();
-
-//        if (registerScoreboard()) return;
 
         registerCommands();
 
@@ -158,34 +154,6 @@ public final class Main extends JavaPlugin {
         raceCreator = new RaceCreator(this,raceManager,carManager,carCreator);
         pitBoxCreator = new PitBoxCreator(this, pitBoxManager);
         log("Done loading car and race creator!");
-    }
-
-    public boolean registerScoreboard() {
-        log("Registering scoreboard...");
-//        ScoreboardManager scoreboardManager = Bukkit.getScoreboardManager();
-//        Scoreboard scoreboard = scoreboardManager.getMainScoreboard();
-//        Objective tempSidebar = scoreboard.getObjective("live_ice_boat_racing");
-//        if(tempSidebar != null) tempSidebar.unregister();
-//        try {
-//            liveSidebar = scoreboard.registerNewObjective("live_ice_boat_racing", Criteria.DUMMY,getMessage("noPrefix.liveSidebarTitle"));
-//        } catch (IllegalArgumentException ignored) {
-//            log("Live Sidebar was found, although it should have been unregistered.");
-//            liveSidebar = scoreboard.getObjective("live_ice_boat_racing");
-//            if(liveSidebar == null) {
-//                log("Could not find live sidebar!");
-//                Bukkit.getPluginManager().disablePlugin(this);
-//                return true;
-//            }
-//            liveSidebar.displayName(getMessage("noPrefix.liveSidebarTitle"));
-//        }
-//        if(liveSidebar == null) {
-//            log("Could not find live sidebar!");
-//            Bukkit.getPluginManager().disablePlugin(this);
-//            return true;
-//        }
-//        liveSidebar.setDisplaySlot(DisplaySlot.SIDEBAR);
-        log("Done registering scoreboard!");
-        return false;
     }
 
     private void registerCommands() {

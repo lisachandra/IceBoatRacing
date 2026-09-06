@@ -1,7 +1,6 @@
 package fr.mattmunich.iceBoatRacing.checkpoint;
 
 import fr.mattmunich.iceBoatRacing.LiveScoreManager;
-import fr.mattmunich.iceBoatRacing.Main;
 import fr.mattmunich.iceBoatRacing.PosSelection;
 import fr.mattmunich.iceBoatRacing.checkpoint.autotrace.AutoTraceManager;
 import fr.mattmunich.iceBoatRacing.checkpoint.autotrace.AutoTraceSession;
@@ -17,7 +16,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Listener;
 import org.bukkit.util.Vector;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;

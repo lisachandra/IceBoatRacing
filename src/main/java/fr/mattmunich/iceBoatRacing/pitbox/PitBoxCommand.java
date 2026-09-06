@@ -1,6 +1,5 @@
 package fr.mattmunich.iceBoatRacing.pitbox;
 
-import fr.mattmunich.iceBoatRacing.Messages;
 import fr.mattmunich.iceBoatRacing.race.Race;
 import fr.mattmunich.iceBoatRacing.race.RaceManager;
 import io.papermc.paper.command.brigadier.BasicCommand;
@@ -12,7 +11,6 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.util.StringUtil;
-import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 

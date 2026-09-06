@@ -2,7 +2,6 @@ package fr.mattmunich.iceBoatRacing.listeners;
 
 import fr.mattmunich.iceBoatRacing.LiveScoreManager;
 import fr.mattmunich.iceBoatRacing.Main;
-import fr.mattmunich.iceBoatRacing.Messages;
 import fr.mattmunich.iceBoatRacing.cars.Car;
 import fr.mattmunich.iceBoatRacing.cars.CarManager;
 import fr.mattmunich.iceBoatRacing.race.Race;

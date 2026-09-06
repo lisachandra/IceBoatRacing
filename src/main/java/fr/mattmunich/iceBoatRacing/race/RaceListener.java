@@ -2,7 +2,6 @@ package fr.mattmunich.iceBoatRacing.race;
 
 import fr.mattmunich.iceBoatRacing.LiveScoreManager;
 import fr.mattmunich.iceBoatRacing.Main;
-import fr.mattmunich.iceBoatRacing.Messages;
 import fr.mattmunich.iceBoatRacing.checkpoint.Checkpoint;
 import fr.mattmunich.iceBoatRacing.pitbox.PitBox;
 import fr.mattmunich.iceBoatRacing.pitbox.PitBoxManager;
