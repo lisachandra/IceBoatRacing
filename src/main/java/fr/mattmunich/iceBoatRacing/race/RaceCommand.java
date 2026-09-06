@@ -5,6 +5,7 @@ import fr.mattmunich.iceBoatRacing.Messages;
 import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jspecify.annotations.NonNull;
@@ -17,6 +18,8 @@ import java.util.Collections;
 import java.util.List;
 
 import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
+import static fr.mattmunich.iceBoatRacing.race.RaceCreator.pos1;
+import static fr.mattmunich.iceBoatRacing.race.RaceCreator.pos2;
 
 public class RaceCommand implements BasicCommand {
     private final Main main;
@@ -33,39 +36,16 @@ public class RaceCommand implements BasicCommand {
     public void execute(@NonNull CommandSourceStack source, String @NonNull [] args) {
         CommandSender sender = source.getSender();
         if(args.length >= 1 && args[0].equalsIgnoreCase("start")) {
-            Race race;
-            if(raceManager.races.size() != 1) {
-                if(args.length!=2) {
-                    sender.sendMessage(getMessage("race.help"));
-                    return;
-                }
-                String raceName = args[1];
-                race = raceManager.getRace(raceName);
-            } else {
-                race = raceManager.races.getFirst();
-            }
-            if(race == null) {
-                sender.sendMessage(getMessage("race.notFound"));
-                return;
-            }
+            ParsedResult parsedResult = parseRace(args, sender);
+            if (parsedResult == null) return;
+            Race race = parsedResult.race();
+
             sender.sendMessage(getMessage("race.start", Messages.formatArguments("race", race.getName())));
             race.start();
         } else if(args.length >= 1 && args[0].equalsIgnoreCase("end")) {
-            Race race;
-            if(raceManager.activeRaces.size() != 1) {
-                if(args.length!=2) {
-                    sender.sendMessage(getMessage("race.help"));
-                    return;
-                }
-                String raceName = args[1];
-                race = raceManager.getRace(raceName);
-            } else {
-                race = raceManager.activeRaces.getFirst();
-            }
-            if(race == null) {
-                sender.sendMessage(getMessage("race.notFound"));
-                return;
-            }
+            ParsedResult parsedResult = parseRace(args, sender);
+            if (parsedResult == null) return;
+            Race race = parsedResult.race();
 
             try {
                 race.end(true);
@@ -80,21 +60,10 @@ public class RaceCommand implements BasicCommand {
                 }
             }
         } else if (args.length >=1 && args[0].equalsIgnoreCase("prepare")) {
-            Race race;
-            if(raceManager.races.size() != 1) {
-                if(args.length!=2) {
-                    sender.sendMessage(getMessage("race.help"));
-                    return;
-                }
-                String raceName = args[1];
-                race = raceManager.getRace(raceName);
-            } else {
-                race = raceManager.races.getFirst();
-            }
-            if(race == null) {
-                sender.sendMessage(getMessage("race.notFound"));
-                return;
-            }
+            ParsedResult parsedResult = parseRace(args, sender);
+            if (parsedResult == null) return;
+            Race race = parsedResult.race();
+
             race.togglePrepare(sender);
         } else if (args.length == 1 && args[0].equalsIgnoreCase("create")) {
             if(!(sender instanceof Player p)) {
@@ -103,21 +72,10 @@ public class RaceCommand implements BasicCommand {
             }
             raceCreator.createRace(p);
         } else if (args.length >= 1 && args[0].equalsIgnoreCase("delete")) {
-            Race race;
-            if(raceManager.races.size() != 1) {
-                if(args.length!=2) {
-                    sender.sendMessage(getMessage("race.help"));
-                    return;
-                }
-                String raceName = args[1];
-                race = raceManager.getRace(raceName);
-            } else {
-                race = raceManager.races.getFirst();
-            }
-            if(race == null) {
-                sender.sendMessage(getMessage("race.notFound"));
-                return;
-            }
+            ParsedResult parsedResult = parseRace(args, sender);
+            if (parsedResult == null) return;
+
+            Race race = parsedResult.race();
 
             String raceName = race.getName();
             Bukkit.getScheduler().runTask(main, () -> {
@@ -145,6 +103,13 @@ public class RaceCommand implements BasicCommand {
             int valueArgIndex = parsedResult.definedRaceName() ? 2 : 1;
 
             handlePitStops(args, valueArgIndex, sender, finalRace);
+        } else if (args.length >= 1 && args[0].equalsIgnoreCase("setLights")) {
+            ParsedResult parsedResult = parseRace(args, sender);
+            if (parsedResult == null) return;
+
+            Race finalRace = parsedResult.race();
+
+            handleLights(sender, finalRace);
         } else {
             sender.sendMessage(getMessage("race.help"));
         }
@@ -178,6 +143,66 @@ public class RaceCommand implements BasicCommand {
             sender.sendMessage(getMessage("race.updatedPitStops", Messages.formatArguments(
                     "race", finalRace.getName(),
                     "pitStops", finalRace.getRequiredPitStops()
+            )));
+        });
+    }
+
+    private void handleLights(CommandSender sender, Race finalRace) {
+        if (!(sender instanceof Player p)) {
+            sender.sendMessage(getMessage("error.playerToExecuteCommand"));
+            return;
+        }
+
+        // No new positions selected -> show current state instead of updating
+        if (pos1.get(p) == null || pos2.get(p) == null) {
+            Race.Lights lights = finalRace.getLights();
+
+            if (lights == null) {
+                p.sendMessage(getMessage("race.lightsNotSet"));
+                return;
+            }
+
+            if (!lights.enabled()) {
+                p.sendMessage(getMessage("race.lightsDisabled"));
+                return;
+            }
+
+            Location l1 = lights.from();
+            Location l2 = lights.to();
+
+            p.sendMessage(getMessage("race.currentLights", Messages.formatArguments(
+                    "race", finalRace.getName(),
+                    "x1", l1.getBlockX(),
+                    "y1", l1.getBlockY(),
+                    "z1", l1.getBlockZ(),
+                    "x2", l2.getBlockX(),
+                    "y2", l2.getBlockY(),
+                    "z2", l2.getBlockZ()
+            )));
+            return;
+        }
+
+        // Capture the selected positions now — pos1/pos2 maps could change
+        // by the time the scheduled task actually runs.
+        Location newPos1 = pos1.get(p);
+        Location newPos2 = pos2.get(p);
+
+        Bukkit.getScheduler().runTask(main, () -> {
+            finalRace.setLights(new Race.Lights(true, newPos1, newPos2));
+            try {
+                finalRace.saveConfig();
+            } catch (IOException e) {
+                sender.sendMessage(getMessage("error.unknown"));
+                return;
+            }
+            sender.sendMessage(getMessage("race.updatedLights", Messages.formatArguments(
+                    "race", finalRace.getName(),
+                    "x1", newPos1.getBlockX(),
+                    "y1", newPos1.getBlockY(),
+                    "z1", newPos1.getBlockZ(),
+                    "x2", newPos2.getBlockX(),
+                    "y2", newPos2.getBlockY(),
+                    "z2", newPos2.getBlockZ()
             )));
         });
     }

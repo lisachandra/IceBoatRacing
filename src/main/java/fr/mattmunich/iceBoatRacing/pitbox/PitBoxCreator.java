@@ -1,12 +1,13 @@
 package fr.mattmunich.iceBoatRacing.pitbox;
 
 import fr.mattmunich.iceBoatRacing.Main;
-import fr.mattmunich.iceBoatRacing.checkpoint.CheckpointCommand;
+import fr.mattmunich.iceBoatRacing.PosSelection;
 import fr.mattmunich.iceBoatRacing.race.Race;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -123,18 +124,18 @@ public class PitBoxCreator implements Listener {
                 return;
             }
 
-            Location l1 = CheckpointCommand.pos1.get(p);
-            Location l2 = CheckpointCommand.pos2.get(p);
+            Location l1 = PosSelection.pos1.get(p);
+            Location l2 = PosSelection.pos2.get(p);
             if (l1 == null || l2 == null) {
-                p.sendMessage(getMessage("checkpoint.pos.notSet"));
+                p.sendMessage(getMessage("pos.notSet"));
                 return;
             }
 
             PendingPitBoxConfig config = tempPitBox.get(p);
             config.pos1 = l1;
             config.pos2 = l2;
-            CheckpointCommand.pos1.remove(p);
-            CheckpointCommand.pos2.remove(p);
+            PosSelection.pos1.remove(p);
+            PosSelection.pos2.remove(p);
 
             p.sendMessage(getMessage("pitbox.create.2.completed"));
             showStep3(p);
@@ -220,12 +221,26 @@ public class PitBoxCreator implements Listener {
                 return;
             }
 
-            List<String> allowed = message.equals("*")
-                    ? List.of("*")
+            List<String> allowedNames = message.equals("*")
+                    ? new ArrayList<>() //No filter
                     : Arrays.asList(message.trim().split("\\s+"));
 
-            tempPitBox.get(p).allowed = new ArrayList<>(allowed);
-            p.sendMessage(getMessage("pitbox.create.4.completed", formatArguments("players", String.join(", ", allowed))));
+            List<UUID> allowedUUIDs = new ArrayList<>();
+            OfflinePlayer[] offlinePlayers = Bukkit.getOfflinePlayers();
+            for  (String allowedName : allowedNames) {
+                Optional<OfflinePlayer> result = Arrays.stream(offlinePlayers)
+                        .filter(off -> Objects.requireNonNull(off.getName()).equalsIgnoreCase(allowedName))
+                        .findFirst();
+                if (result.isPresent()) {
+                    allowedUUIDs.add(result.get().getUniqueId());
+                } else {
+                    p.sendMessage(getMessage("playerNeverJoined", formatArguments("name",  allowedName)));
+                    return;
+                }
+            }
+
+            tempPitBox.get(p).allowed = new ArrayList<>(allowedUUIDs);
+            p.sendMessage(getMessage("pitbox.create.4.completed", formatArguments("players", String.join(", ", allowedNames.isEmpty() ? List.of("*") : allowedNames))));
 
             showStep5(p);
         });
@@ -338,8 +353,8 @@ public class PitBoxCreator implements Listener {
     private void cancelCleanUp(Player p) {
         creatingPitBox.remove(p);
         tempPitBox.remove(p);
-        CheckpointCommand.pos1.remove(p);
-        CheckpointCommand.pos2.remove(p);
+        PosSelection.pos1.remove(p);
+        PosSelection.pos2.remove(p);
         confirmCancel.remove(p);
         p.sendMessage(getMessage("pitbox.create.cancelled"));
     }

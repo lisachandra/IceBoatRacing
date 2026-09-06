@@ -24,19 +24,23 @@
 #(except titles and messages under the "noPrefix" section)
 prefix: "<b><gradient:#8DABF3:#10CA9A>IBR</gradient><dark_gray> >></b><reset>"
 
-noPrefix:
+liveScore:
   #The title of the scoreboard during a race
-  liveSidebarTitle: "§3-- §b§lBoat Race §3--"
+  title: "§3-- §b§lOIce Boat Race §3--"
+  format: "§b%player% §7- §3Laps: §b%completedLapCount%§3/§b%lapCount% §7- §3Pits: §b%completedPitStops%§3/§b%requiredPitStops%"
+
+noPrefix:
   #Join and leave messages
   join: "§7[§a+§7] §b%player%"
   quit: "§7[§c-§7] §b%player%"
 
+#Messages regarding the  setting pos
+pos:
+  1: "§bPos §31§b : §3%x%§b, §3%y%§b, §3%z%§b"
+  2: "§bPos §32§b : §3%x%§b, §3%y%§b, §3%z%§b"
+  notSet: "§cSelect §4both positions§c first!\n§8ℹ With a wooden shovel"
+
 checkpoint:
-  #Messages regarding the checkpoint setting pos
-  pos:
-    1: "§bPos §31§b checkpoint: §3%x%§b, §3%y%§b, §3%z%§b"
-    2: "§bPos §32§b checkpoint: §3%x%§b, §3%y%§b, §3%z%§b"
-    notSet: "§cSelect §4both positions§c first!\n§8ℹ With a wooden shovel"
   #Usage / success messages
   create:
     usage: "§cUsage: /checkpoint create [sector|finish] <raceName>"
@@ -54,17 +58,18 @@ checkpoint:
   invalid: "§cInvalid checkpoint number"
   noCheckpoint: "§cNo checkpoint defined"
 
-  #Main /checkpoint help fallback
-  help: "§eSubcommands of /checkpoint:
-  \n§7- §f/checkpoint list
-  \n§7- §f/checkpoint count
-  \n§7- §f/checkpoint create [sector|finish] <raceName>
-  \n§7- §f/checkpoint autotrace start|stop|preview|sector|add|resize|delete|accept|cancel
-  \n§7- §f/checkpoint addAlternate <raceName> <checkpointID>
-  \n§7- §f/checkpoint view <raceName>
-  \n§7- §f/checkpoint remove|delete [raceName] [checkpointID]
-  \n§7- §f/checkpoint clearAll <raceName>
-  \n§7- §f/checkpoint resetData <player> <raceName>"
+  #Main /checkpoint help
+  help: "§3--------- §b§l/checkpoint§r §3---------
+  \n§3->§a list §8-§7 List all checkpoints
+  \n§3->§a count §8-§7 Show the checkpoint count
+  \n§3->§a create [sector|finish] <raceName> §8-§7 Create a checkpoint
+  \n§3->§a autotrace start|stop|preview|sector|add|resize|delete|accept|cancel §8-§7 Auto-trace the track
+  \n§3->§a addAlternate <raceName> <checkpointID> §8-§7 Add an alternate route
+  \n§3->§a view <raceName> §8-§7 Toggle checkpoint visibility
+  \n§3->§a remove|delete [raceName] [checkpointID] §8-§7 Remove a checkpoint
+  \n§3->§a clearAll <raceName> §8-§7 Remove all checkpoints
+  \n§3->§a resetData <player> <raceName> §8-§7 Reset a player's score
+  "
 
 
   #Tags shown in /checkpoint list
@@ -79,16 +84,22 @@ checkpoint:
 
   #Auto-trace (recording/generation) commands
   autotrace:
-    help: "§eAuto-trace commands:
-    \n§7- §f/checkpoint autotrace start <raceName> [spacing] [width] [height] [loop|noloop]
-    \n§7- §f/checkpoint autotrace stop
-    \n§7- §f/checkpoint autotrace preview §7(toggle)
-    \n§7- §f/checkpoint autotrace sector §7(click 2 blocks with the shovel first)
-    \n§7- §f/checkpoint autotrace add §7(click 2 blocks to add a manual checkpoint)
-    \n§7- §f/checkpoint autotrace resize §7(click 2 blocks marking the correct width)
-    \n§7- §f/checkpoint autotrace delete §7(stand near the checkpoint to remove)
-    \n§7- §f/checkpoint autotrace accept
-    \n§7- §f/checkpoint autotrace cancel"
+    help: "§3--------- §b§l/checkpoint autotrace§r §3---------
+    \n§3->§a start <raceName> [spacing] [width] [height] [loop|noloop] §8-§7 Start recording
+    \n§3->§a stop §8-§7 Stop recording
+    \n§3->§a preview §8-§7 Toggle the preview
+    \n§3->§a sector §8-§7 Mark a sector
+    \n§7§oℹ Click 2 blocks with the shovel first
+    \n§3->§a add §8-§7 Add a manual checkpoint
+    \n§7§oℹ Click 2 blocks to add it
+    \n§3->§a resize §8-§7 Resize a checkpoint
+    \n§7§oℹ Click 2 blocks marking the correct width
+    \n§3->§a delete §8-§7 Remove a checkpoint
+    \n§7§oℹ Stand near the checkpoint to remove
+    \n§3->§a accept §8-§7 Save the generated checkpoints
+    \n§3->§a cancel §8-§7 Cancel the session
+    "
+
     usageStart: "§cUsage: /checkpoint autotrace start <raceName> [spacing] [width] [height] [loop|noloop]"
     started: "§aRecording started for race §f%race%§a. Ride or walk the full lap of the track.\n§8ℹ Recording stops automatically once you return near the starting point, or run §f/checkpoint autotrace stop §8manually."
     noSession: "§cYou don't have an active auto-trace session."
@@ -164,6 +175,12 @@ race:
   updatedPitStops: "§bThe number of mandatory pit stops for race §3%race%§b has been set to §3%pitStops%§b."
   invalidPitStops: "§cThe pit stop count entered is invalid."
 
+  #Lights
+  currentLights: "§bThe starting lights for race %race% are set from §3%x1%§b, §3%y1%§b, §3%z1%§b to §3%x2%§b, §3%y2%§b, §3%z2%§b."
+  lightsNotSet: "§cThe starting lights have not been set yet."
+  lightsDisabled: "§cThe starting lights are disabled. §8ℹ Re-enable them in this race's configuration file."
+  updatedLights: "§bThe starting lights for race §3%race%§b have been set from §3%x1%§b, §3%y1%§b, §3%z1%§b to §3%x2%§b, §3%y2%§b, §3%z2%§b."
+
   #Help message
   help: "§3--------- §b§l/race§r §3---------
   \n§3->§a start [name] §8-§7 Start the race
@@ -171,7 +188,11 @@ race:
   \n§7§oℹ Automatically places players in their cars
   \n§3->§a end [name] §8-§7 End the race
   \n§3->§a delete [name] §8-§7 Delete the race
-  \n§3->§a setLapCount [name] <number> §8-§7 Set the lap count"
+  \n§3->§a setLapCount [name] <number> §8-§7 Set the lap count
+  \n§3->§a setStartRotation [name] <0-360 or n/w/s/e> §8-§7 Set the starting angle
+  \n§3->§a setPitStops [name] <number> §8-§7 Set the number of required pit stops
+  \n§3->§a setLights [name] §8-§7 Set the starting lights
+  "
 
   #In race events
   onCompleteLap:
@@ -298,12 +319,13 @@ pitbox:
   setColor:
     updated: "§aPit box §f#%id%§a color set to §f%color%"
     invalid: "§cInvalid color. Choices: §f%availableColors%"
-  help: "§eSubcommands of /pitbox:
-  \n§7- §f/pitbox create <raceName>
-  \n§7- §f/pitbox list <raceName>
-  \n§7- §f/pitbox remove <raceName> <id>
-  \n§7- §f/pitbox setAllowed <raceName> <id> <players...|*>
-  \n§7- §f/pitbox setColor <raceName> <id> <color>"
+  help: "§3--------- §b§l/pitbox§r §3---------
+  \n§3->§a create <raceName> §8-§7 Create a pit box
+  \n§3->§a list <raceName> §8-§7 List pit boxes
+  \n§3->§a remove <raceName> <id> §8-§7 Remove a pit box
+  \n§3->§a setAllowed <raceName> <id> <players...|*> §8-§7 Set allowed players
+  \n§3->§a setColor <raceName> <id> <color> §8-§7 Set the pit box color
+  "
 
   create:
     confirm: "confirm"
@@ -348,6 +370,15 @@ car:
   changedOwner: "§aOwner changed: %owner%"
   removed: "§aCar removed (id %id%)"
 
+  #Help message
+  help: "§3--------- §b§l/car§r §3---------
+  \n§3->§a create §8-§7 Create a car
+  \n§3->§a list [page] §8-§7 List all cars
+  \n§3->§a changeOwner <id> <raceName> <player> §8-§7 Change a car's owner
+  \n§3->§a remove <id> <raceName> §8-§7 Remove a car
+  \n§3->§a selectRace <raceName> §8-§7 Select the race for car creation
+  "
+
   #Messages/titles shown in the car creation process
   create:
     1:
@@ -384,5 +415,6 @@ car:
 error:
   invalidNumber: "§cInvalid number"
   playerNotFound: "§cPlayer not found"
+  playerNeverJoined: "§cThe player §4%name%§c has never joined this server and therefore cannot be found."
   playerToExecuteCommand: "§cYou must be a player to do this."
   unknown: "§cAn unknown error occurred. Check the console for an error message."

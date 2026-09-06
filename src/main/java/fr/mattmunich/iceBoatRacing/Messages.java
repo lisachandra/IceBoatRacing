@@ -206,6 +206,7 @@ public class Messages {
                 !identifier.contains("noPrefix") //Currently used for join/quit and liveSidebarTitle
                 && !identifier.equals("prefix") //Don't add prefix after prefix
                 && !identifier.contains("title") //=> titles and subtitles
+                && !identifier.contains("liveScore") //Live Score sidebar
                 && !identifier.contains("countdown") //sector countdown
                 && !identifier.contains("actionBar") //actionBar messages
                 //Commands when creating race, checkpoints or cars

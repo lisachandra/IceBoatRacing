@@ -8,17 +8,17 @@
 * Unless there is something more written next to it
   * <s> Example</s> <b>UPDATE</b>: Some example   
 ---
-* Pitboxes
-	* Switch from name check to UUID
-* Live scoreboard
-	* Add pitboxes and lap count
-	* Remove racer on finish (cause when there are a lot of racers you can't see the last ones)
+* <s>Pitboxes</s> <b>DONE!</b>
+	* <s>Switch from name check to UUID</s>
+    * <s>Convert old pitboxes with name to new ones with UUID automatically</s>
+* <s>Live scoreboard</s> <b>DONE!</b>
+	* <s>Add pitboxes and lap count</s>
+	* <s>Remove racer on finish (cause when there are a lot of racers you can't see the last ones)</s>
+* <s>[BUG] When in prepare mode, starting the race will not work properly</s>
+* <s>Make the pos selection global (like not only for checkpoints)</s>
+* <s>Race lights selection using the pos selections</s>
 * Allow to convert legacy `config.yml` races to  new `races/[race].yml` 
 	* (Planned, but people will have to redefine checks anyway, soo not so sure that it will be done)
-* Encourage people to use the new `PLANE` checkpoints
-  * Easier to define
-  * Work more reliably
-	* → Basically fix all bugs, warn on old races (with BOX checkpoints → deprecated)
 * Test all the new features (est. 90-95% done)
 * Make checkpoint alternate adding easier (Planned pretty soon)
 	* <s> Add a way to get a checkpoint's ID</s> 

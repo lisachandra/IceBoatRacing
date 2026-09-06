@@ -4,6 +4,7 @@ import fr.mattmunich.iceBoatRacing.cars.Car;
 import fr.mattmunich.iceBoatRacing.checkpoint.Checkpoint;
 import fr.mattmunich.iceBoatRacing.pitbox.PitBox;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -31,13 +32,13 @@ public class Race {
 
     final List<Checkpoint> checkpoints = new ArrayList<>();
     final List<Car> cars = new ArrayList<>();
-    public final Map<UUID, RaceData> racers = new HashMap<>();
+    public final Map<UUID, Racer> racers = new HashMap<>();
 
     /**
      * List of the racers that are actively racing
      * (-> those who have finished the race are not included)
      */
-    public List<RaceData> racing = new ArrayList<>();
+    public List<Racer> racing = new ArrayList<>();
     boolean startingRace = false;
     boolean preparingRace = false;
     boolean hasRaceStarted = false;
@@ -45,13 +46,25 @@ public class Race {
      * List of the racers who hae finished the race.
      * rankings.get(0) is first, rankings.get(1) is second and so on
      */
-    public Map<Integer, RaceData> rankings = new HashMap<>();
+    public Map<Integer, Racer> rankings = new HashMap<>();
     public long currentBestLapTime = Long.MAX_VALUE;
 
 
     public Race(String name, World world) {
         this.name = name;
         this.world = world;
+    }
+
+    public record Lights(boolean enabled, Location from, Location to) {}
+
+    public Lights lights = new Lights(false, null, null);
+
+    public Lights getLights() {
+        return lights.from == null || lights.to == null ? null : lights;
+    }
+
+    public void setLights(Lights lights) {
+        this.lights = lights;
     }
 
     /**
@@ -240,10 +253,10 @@ public class Race {
         // Split by DSQ status while preserving original finish-crossing order within each group.
         // rankings' keys are sequential ints assigned in crossing order (see onFinishRace), so
         // walking 0..size-1 reconstructs that order reliably (racers.values() below does not).
-        List<RaceData> qualified = new ArrayList<>();
-        List<RaceData> disqualified = new ArrayList<>();
+        List<Racer> qualified = new ArrayList<>();
+        List<Racer> disqualified = new ArrayList<>();
         for (int i = 0; i < rankings.size(); i++) {
-            RaceData data = rankings.get(i);
+            Racer data = rankings.get(i);
             if (data == null) continue;
             if (data.disqualified) disqualified.add(data);
             else qualified.add(data);
@@ -251,7 +264,7 @@ public class Race {
 
         long previousTime = -1;
         int displayRank = 1;
-        for (RaceData data : qualified) {
+        for (Racer data : qualified) {
             long raceTime = data.getRaceTime();
             if (displayRank == 1) {
                 Bukkit.broadcast(getMessage("race.onEnd.winnerFormat", formatArguments(
@@ -272,7 +285,7 @@ public class Race {
             displayRank++;
         }
 
-        for (RaceData data : disqualified) {
+        for (Racer data : disqualified) {
             Bukkit.broadcast(getMessage("race.onEnd.disqualifiedFormat", formatArguments(
                     "player", data.player == null ? "OFFLINE" : data.player.getName(),
                     "raceTime", formatTime(data.getRaceTime())
@@ -289,7 +302,7 @@ public class Race {
         Map<Integer, Long> bestSectorTimes = new HashMap<>();
         Map<Integer, Player> bestSectorPlayers = new HashMap<>();
 
-        for (RaceData data : racers.values()) {
+        for (Racer data : racers.values()) {
             if (!data.getLapTimes().isEmpty()) {
                 for (long lapTime : data.getLapTimes()) {
                     if (lapTime < bestLapTime) {

@@ -1,7 +1,7 @@
 package fr.mattmunich.iceBoatRacing.cars;
 
 import fr.mattmunich.iceBoatRacing.race.Race;
-import fr.mattmunich.iceBoatRacing.race.RaceData;
+import fr.mattmunich.iceBoatRacing.race.Racer;
 import fr.mattmunich.iceBoatRacing.race.RaceManager;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.Entity;
@@ -25,7 +25,7 @@ public class CarListener implements Listener {
     @EventHandler
     public void onExitVehicle(VehicleExitEvent e) {
         if (!(e.getExited() instanceof Player p)) return;
-        RaceData data = null;
+        Racer data = null;
         for(Race race : raceManager.activeRaces) if(race.racers.containsKey(p.getUniqueId())) data = race.racers.get(p.getUniqueId());
         if (data == null || data.race == null || data.car == null) return;
         if(data.race.isNotStarting() && !data.race.isPreparing() && !data.race.hasStarted()) return;
@@ -41,7 +41,7 @@ public class CarListener implements Listener {
         try { passenger = vehicle.getPassengers().getFirst(); } catch (NoSuchElementException ignored) { return; }
         if(passenger == null) return;
         if(!(passenger instanceof Player p)) return;
-        RaceData data = null;
+        Racer data = null;
         for(Race race : raceManager.activeRaces) if(race.racers.containsKey(p.getUniqueId())) data = race.racers.get(p.getUniqueId());
         if (data == null || data.race == null || data.car == null) return;
         if(!data.race.isPreparing() && data.race.isNotStarting() && data.pittingBox==null) return;

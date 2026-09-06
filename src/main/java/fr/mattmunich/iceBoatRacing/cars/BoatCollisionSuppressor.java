@@ -7,7 +7,7 @@ import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerVehicleMove;
 import org.bukkit.entity.Player;
 
-import fr.mattmunich.iceBoatRacing.race.RaceData;
+import fr.mattmunich.iceBoatRacing.race.Racer;
 import fr.mattmunich.iceBoatRacing.race.RaceManager;
 
 /**
@@ -45,7 +45,7 @@ public class BoatCollisionSuppressor extends PacketListenerAbstract {
             return;
         }
 
-        RaceData racer = raceManager.getRacer(player.getUniqueId());
+        Racer racer = raceManager.getRacer(player.getUniqueId());
         if (racer == null || !racer.racing) {
             return; // not racing — let normal vehicle-move corrections through
         }

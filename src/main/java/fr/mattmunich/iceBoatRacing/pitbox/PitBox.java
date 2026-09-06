@@ -1,6 +1,7 @@
 package fr.mattmunich.iceBoatRacing.pitbox;
 
 import org.bukkit.Location;
+import org.bukkit.OfflinePlayer;
 
 import java.util.List;
 import java.util.UUID;
@@ -19,12 +20,12 @@ public class PitBox {
     private final Location max;
     private final TaskType taskType;
     private final int duration; // seconds, only meaningful for TIMED
-    private List<String> allowed; // player names, or "*" for anyone racing
+    private List<UUID> allowed; // player UUIDs
 
     // Runtime-only occupancy state — never persisted, rebuilt as empty on load.
     private UUID occupant;
 
-    public PitBox(int id, String name, Location min, Location max, TaskType taskType, int duration, List<String> allowed, PitBoxColor color) {
+    public PitBox(int id, String name, Location min, Location max, TaskType taskType, int duration, List<UUID> allowed, PitBoxColor color) {
         this.id = id;
         this.name = name;
         this.min = min;
@@ -46,13 +47,14 @@ public class PitBox {
         return name;
     }
 
-    public void setAllowed(List<String> allowed) {
+    public void setAllowed(List<UUID> allowed) {
         this.allowed = allowed;
     }
 
-    public boolean isAllowed(String playerName) {
-        for (String name : allowed) {
-            if (name.equals("*") || name.equalsIgnoreCase(playerName)) return true;
+    public boolean isAllowed(OfflinePlayer player) {
+        if(allowed.isEmpty()) return true;
+        for (UUID allowed : allowed) {
+            if (allowed.equals(player.getUniqueId())) return true;
         }
         return false;
     }
@@ -101,7 +103,7 @@ public class PitBox {
         return duration;
     }
 
-    public List<String> getAllowed() {
+    public List<UUID> getAllowed() {
         return allowed;
     }
 }

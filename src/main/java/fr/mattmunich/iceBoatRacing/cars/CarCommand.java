@@ -77,11 +77,7 @@ public class CarCommand implements BasicCommand, Listener {
         } else if (args.length == 2 && args[0].equalsIgnoreCase("selectRace")) {
             carCreator.selectRace(args, p);
         } else {
-            p.sendMessage(c("§aCar commands:"));
-            p.sendMessage(c("§7- §f/checkpoint list"));
-            p.sendMessage(c("§7- §f/checkpoint create"));
-            p.sendMessage(c("§7- §f/checkpoint changeOwner"));
-            p.sendMessage(c("§7- §f/checkpoint remove"));
+            p.sendMessage(getMessage("car.help"));
         }
     }
 

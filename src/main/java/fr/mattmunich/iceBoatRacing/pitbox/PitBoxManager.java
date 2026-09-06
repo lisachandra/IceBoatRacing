@@ -2,7 +2,7 @@ package fr.mattmunich.iceBoatRacing.pitbox;
 
 import fr.mattmunich.iceBoatRacing.Main;
 import fr.mattmunich.iceBoatRacing.race.Race;
-import fr.mattmunich.iceBoatRacing.race.RaceData;
+import fr.mattmunich.iceBoatRacing.race.Racer;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
@@ -39,7 +39,7 @@ public class PitBoxManager {
     // Storage (mirrors CheckpointManager's save/load conventions)
     // ---------------------------------------------------------------------
 
-    public PitBox savePitBox(Race race, String name, Location l1, Location l2, PitBox.TaskType taskType, int duration, List<String> allowed, PitBoxColor color) {
+    public PitBox savePitBox(Race race, String name, Location l1, Location l2, PitBox.TaskType taskType, int duration, List<UUID> allowed, PitBoxColor color) {
         Location min = min(l1, l2);
         Location max = max(l1, l2);
         int id = nextId(race);
@@ -50,6 +50,9 @@ public class PitBoxManager {
             return null;
         }
 
+        List<String> allowedUUIDs = new ArrayList<>();
+        allowed.forEach(uuid -> allowedUUIDs.add(uuid.toString()));
+
         String path = "pitboxes." + id;
         config.set(path + ".name", name);
         config.set(path + ".world", min.getWorld().getName());
@@ -57,7 +60,7 @@ public class PitBoxManager {
         config.set(path + ".max", serialize(max));
         config.set(path + ".taskType", taskType.name());
         config.set(path + ".duration", duration);
-        config.set(path + ".allowed", allowed);
+        config.set(path + ".allowed", allowedUUIDs);
         config.set(path + ".color", color.name());
 
         try {
@@ -72,14 +75,17 @@ public class PitBoxManager {
         return box;
     }
 
-    public boolean setAllowed(Race race, PitBox box, List<String> allowed) {
+    public boolean setAllowed(Race race, PitBox box, List<UUID> allowed) {
         YamlConfiguration config = race.getConfig();
         if (config == null) {
             main.log("§cAllowed list for pit box " + box.getId() + " on race " + race.getName() + " wasn't updated, see cause above.");
             return false;
         }
 
-        config.set("pitboxes." + box.getId() + ".allowed", allowed);
+        List<String> allowedString = new ArrayList<>();
+        allowed.forEach(uuid -> allowedString.add(uuid.toString()));
+
+        config.set("pitboxes." + box.getId() + ".allowed", allowedString);
 
         try {
             race.saveConfig();
@@ -154,8 +160,27 @@ public class PitBoxManager {
             PitBox.TaskType taskType = taskTypeString == null ? PitBox.TaskType.TIMED : PitBox.TaskType.valueOf(taskTypeString);
 
             int duration = config.getInt("pitboxes." + key + ".duration", 5);
-            List<String> allowed = config.getStringList("pitboxes." + key + ".allowed");
-            if (allowed.isEmpty()) allowed = List.of("*");
+            List<String> allowedStrings = config.getStringList("pitboxes." + key + ".allowed");
+            if (allowedStrings.getFirst().equalsIgnoreCase("*")) allowedStrings = new ArrayList<>();
+
+            boolean updated = false;
+
+            List<UUID> allowed = new ArrayList<>();
+            for (String allowedString : allowedStrings) {
+                try {
+                    allowed.add(UUID.fromString(allowedString));
+                } catch (IllegalArgumentException e) {
+                    //Convert old allowed names to UUIDs - will be saved later on.
+                    allowed.add(Bukkit.getOfflinePlayer(allowedString).getUniqueId());
+                    updated = true;
+                }
+            }
+
+            if(updated) {
+                List<String> allowedString = new ArrayList<>();
+                allowed.forEach(uuid -> allowedString.add(uuid.toString()));
+                config.set("pitboxes." + id + ".allowed", allowedString);
+            }
 
             String colorString = config.getString("pitboxes." + key + ".color");
             PitBoxColor color = colorString == null ? PitBoxColor.ICE : PitBoxColor.valueOf(colorString);
@@ -180,7 +205,7 @@ public class PitBoxManager {
      * both holds the player in place and keeps them inside the trigger volume — so no
      * separate exit/cancel detection is needed for the mandatory-timed case.
      */
-    public void startSession(Player player, RaceData data, PitBox box) {
+    public void startSession(Player player, Racer data, PitBox box) {
         box.setOccupant(player.getUniqueId());
         data.pittingBox = box;
         data.lastPitBox = System.currentTimeMillis();
@@ -222,7 +247,7 @@ public class PitBoxManager {
         activeSessions.put(player.getUniqueId(), task);
     }
 
-    private void completeSession(Player player, RaceData data, PitBox box) {
+    private void completeSession(Player player, Racer data, PitBox box) {
         BukkitTask task = activeSessions.remove(player.getUniqueId());
         if (task != null) task.cancel();
 

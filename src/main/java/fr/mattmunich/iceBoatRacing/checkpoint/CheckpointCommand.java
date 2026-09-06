@@ -1,7 +1,8 @@
 package fr.mattmunich.iceBoatRacing.checkpoint;
 
+import fr.mattmunich.iceBoatRacing.LiveScoreManager;
 import fr.mattmunich.iceBoatRacing.Main;
-import fr.mattmunich.iceBoatRacing.Messages;
+import fr.mattmunich.iceBoatRacing.PosSelection;
 import fr.mattmunich.iceBoatRacing.checkpoint.autotrace.AutoTraceManager;
 import fr.mattmunich.iceBoatRacing.checkpoint.autotrace.AutoTraceSession;
 import fr.mattmunich.iceBoatRacing.checkpoint.autotrace.PendingAutoTraceConfig;
@@ -14,14 +15,9 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.block.Block;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.Action;
-import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.util.Vector;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -30,60 +26,28 @@ import java.util.*;
 
 import static fr.mattmunich.iceBoatRacing.Main.c;
 import static fr.mattmunich.iceBoatRacing.Messages.*;
-import static fr.mattmunich.iceBoatRacing.race.RaceCreator.creatingRace;
 
-public class CheckpointCommand implements Listener, BasicCommand {
+public class CheckpointCommand implements BasicCommand {
 
     private final CheckpointManager checkpointManager;
     private final RaceManager raceManager;
     private final AutoTraceManager autoTraceManager;
     private final RaceCreator raceCreator;
+    private final LiveScoreManager liveScoreManager;
 
-    private final Main main;
 
-    public CheckpointCommand(CheckpointManager checkpointManager, RaceManager raceManager, AutoTraceManager autoTraceManager, RaceCreator raceCreator, Main main) {
+    public CheckpointCommand(CheckpointManager checkpointManager, RaceManager raceManager, AutoTraceManager autoTraceManager, RaceCreator raceCreator, LiveScoreManager liveScoreManager) {
         this.checkpointManager = checkpointManager;
         this.raceManager = raceManager;
         this.autoTraceManager = autoTraceManager;
         this.raceCreator = raceCreator;
-        this.main = main;
+        this.liveScoreManager = liveScoreManager;
     }
 
-    public static final Map<Player, Location> pos1 = new HashMap<>();
-    public static final Map<Player, Location> pos2 = new HashMap<>();
 
     private final Map<Player, PendingClear> pendingClears = new HashMap<>();
 
     private record PendingClear(String raceName, long timestamp) {}
-
-    @EventHandler
-    public void onSelect(PlayerInteractEvent event) {
-        if (event.getItem() == null) return;
-        if (event.getItem().getType() != Material.WOODEN_SHOVEL) return;
-        if(creatingRace.get(event.getPlayer()) != null && creatingRace.get(event.getPlayer()) == 3) return;
-
-        Player p = event.getPlayer();
-
-        if(!p.hasPermission("iceboatracing.command.checkpoint")) return;
-
-        Block clicked = event.getClickedBlock();
-
-        if(clicked == null) return;
-
-        if (event.getAction() == Action.LEFT_CLICK_BLOCK) {
-            event.setCancelled(true);
-            Location old = pos1.put(p, clicked.getLocation());
-            if(pos1.get(p).equals(old)) return;
-            p.sendMessage(getMessage("checkpoint.pos.1",formatArguments("x",""+clicked.getX(),"y",""+clicked.getY(),"z",""+clicked.getZ())));
-        }
-
-        if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
-            event.setCancelled(true);
-            Location old = pos2.put(p, clicked.getLocation());
-            if(pos2.get(p).equals(old)) return;
-            p.sendMessage(getMessage("checkpoint.pos.2",formatArguments("x",""+clicked.getX(),"y",""+clicked.getY(),"z",""+clicked.getZ())));
-        }
-    }
 
     @Override
     public void execute(CommandSourceStack source, String @NonNull [] args) {
@@ -108,7 +72,7 @@ public class CheckpointCommand implements Listener, BasicCommand {
 
             if (checkpoint != null) checkpointManager.remove(race, checkpoint);
             else alt.remove();
-            p.sendMessage(Messages.getMessage("checkpoint.removed",formatArguments("id",checkpoint == null ? alt.getParent().getId() + " - ALT" : "" + checkpoint.getId())));
+            p.sendMessage(getMessage("checkpoint.removed",formatArguments("id",checkpoint == null ? alt.getParent().getId() + " - ALT" : "" + checkpoint.getId())));
         } else if (args.length == 3 && (args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("delete"))) {
 
             int checkpointNum;
@@ -122,7 +86,7 @@ public class CheckpointCommand implements Listener, BasicCommand {
             String raceName = args[2];
             Race race = raceManager.getRace(raceName);
             if (race == null) {
-                source.getSender().sendMessage(Messages.getMessage("race.notFound"));
+                source.getSender().sendMessage(getMessage("race.notFound"));
                 return;
             }
 
@@ -138,14 +102,14 @@ public class CheckpointCommand implements Listener, BasicCommand {
                 p.sendMessage(getMessage("error.unknown"));
                 return;
             }
-            p.sendMessage(Messages.getMessage("checkpoint.removed",
+            p.sendMessage(getMessage("checkpoint.removed",
                     formatArguments("id", "" + checkpointNum)
             ));
         } else if (args.length == 2 && args[0].equalsIgnoreCase("view")) {
             String raceName = args[1];
             Race race = raceManager.getRace(raceName);
             if(race == null) {
-                source.getSender().sendMessage(Messages.getMessage("race.notFound"));
+                source.getSender().sendMessage(getMessage("race.notFound"));
                 return;
             }
 
@@ -241,7 +205,7 @@ public class CheckpointCommand implements Listener, BasicCommand {
         } else if (args.length == 1 && args[0].equalsIgnoreCase("count")) {
             int count = checkpointManager.getAllNoRaceInfo().size();
 
-            p.sendMessage(Messages.getMessage("checkpoint.count",formatArguments("count", "" + count)));
+            p.sendMessage(getMessage("checkpoint.count",formatArguments("count", "" + count)));
         } else if (args.length == 3 && args[0].equalsIgnoreCase("resetData")) {
             Player target = Bukkit.getPlayer(args[1]);
             if(target == null) {
@@ -252,18 +216,17 @@ public class CheckpointCommand implements Listener, BasicCommand {
             String raceName = args[2];
             Race race = raceManager.getRace(raceName);
             if(race == null) {
-                source.getSender().sendMessage(Messages.getMessage("race.notFound"));
+                source.getSender().sendMessage(getMessage("race.notFound"));
                 return;
             }
 
             //Remove data
             race.racers.remove(target.getUniqueId());
-//            Replace with some new clear data
-//            race.racers.put(target.getUniqueId(), new RaceData(target));
 
             //Reset player's data on live scoreboard
-            main.liveSidebar.getScore(target.getName()).resetScore();
-            p.sendMessage(Messages.getMessage("checkpoint.resetPlayerScore",formatArguments("player",p.getName())));
+//            main.liveSidebar.getScore(target.getName()).resetScore();
+            liveScoreManager.removeRacer(target);
+            p.sendMessage(getMessage("checkpoint.resetPlayerScore",formatArguments("player",p.getName())));
         } else if (args[0].equalsIgnoreCase("autotrace")) {
             handleAutoTrace(p, args);
         } else if (args.length == 3 && args[0].equalsIgnoreCase("addAlternate")) {
@@ -274,7 +237,7 @@ public class CheckpointCommand implements Listener, BasicCommand {
             String raceName = args[1];
             Race race = raceManager.getRace(raceName);
             if(race == null) {
-                source.getSender().sendMessage(Messages.getMessage("race.notFound"));
+                source.getSender().sendMessage(getMessage("race.notFound"));
                 return;
             }
             int id = checkpointManager.getNearestCheckpoint(race, p.getLocation());
@@ -299,10 +262,10 @@ public class CheckpointCommand implements Listener, BasicCommand {
             return;
         }
 
-        Location l1 = pos1.get(p);
-        Location l2 = pos2.get(p);
+        Location l1 = PosSelection.pos1.get(p);
+        Location l2 = PosSelection.pos2.get(p);
         if (l1 == null || l2 == null) {
-            p.sendMessage(getMessage("checkpoint.pos.notSet"));
+            p.sendMessage(getMessage("pos.notSet"));
             return;
         }
 
@@ -322,12 +285,12 @@ public class CheckpointCommand implements Listener, BasicCommand {
 
         Race race = raceManager.getRace(raceName);
         if (race == null) {
-            p.sendMessage(Messages.getMessage("race.notFound"));
+            p.sendMessage(getMessage("race.notFound"));
             return;
         }
 
-        pos1.remove(p);
-        pos2.remove(p);
+        PosSelection.pos1.remove(p);
+        PosSelection.pos2.remove(p);
 
         if (explicitType == Checkpoint.Type.SECTOR) {
             Checkpoint checkpoint = checkpointManager.saveSectorCheckpoint(race, l1, l2);
@@ -377,7 +340,7 @@ public class CheckpointCommand implements Listener, BasicCommand {
 
             Race race = raceManager.getRace(args[2]);
             if (race == null) {
-                player.sendMessage(Messages.getMessage("race.notFound"));
+                player.sendMessage(getMessage("race.notFound"));
                 return;
             }
 
@@ -505,11 +468,11 @@ public class CheckpointCommand implements Listener, BasicCommand {
             player.sendMessage(getMessage(nowOn ? "checkpoint.autotrace.previewOn" : "checkpoint.autotrace.previewOff"));
 
         } else if (sub.equalsIgnoreCase("sector")) {
-            Location l1 = pos1.get(player);
-            Location l2 = pos2.get(player);
+            Location l1 = PosSelection.pos1.get(player);
+            Location l2 = PosSelection.pos2.get(player);
 
             if (l1 == null || l2 == null) {
-                player.sendMessage(getMessage("checkpoint.pos.notSet"));
+                player.sendMessage(getMessage("pos.notSet"));
                 return;
             }
 
@@ -518,8 +481,8 @@ public class CheckpointCommand implements Listener, BasicCommand {
                 return;
             }
 
-            pos1.remove(player);
-            pos2.remove(player);
+            PosSelection.pos1.remove(player);
+            PosSelection.pos2.remove(player);
 
             boolean success = autoTraceManager.addSectorMarker(player, l1, l2);
             if (!success) {
@@ -530,11 +493,11 @@ public class CheckpointCommand implements Listener, BasicCommand {
             player.sendMessage(getMessage("checkpoint.autotrace.sectorMarked"));
 
         } else if (sub.equalsIgnoreCase("add")) {
-            Location l1 = pos1.get(player);
-            Location l2 = pos2.get(player);
+            Location l1 = PosSelection.pos1.get(player);
+            Location l2 = PosSelection.pos2.get(player);
 
             if (l1 == null || l2 == null) {
-                player.sendMessage(getMessage("checkpoint.pos.notSet"));
+                player.sendMessage(getMessage("pos.notSet"));
                 return;
             }
 
@@ -543,8 +506,8 @@ public class CheckpointCommand implements Listener, BasicCommand {
                 return;
             }
 
-            pos1.remove(player);
-            pos2.remove(player);
+            PosSelection.pos1.remove(player);
+            PosSelection.pos2.remove(player);
 
             boolean success = autoTraceManager.addManualMarker(player, l1, l2);
             if (!success) {
@@ -555,16 +518,16 @@ public class CheckpointCommand implements Listener, BasicCommand {
             player.sendMessage(getMessage("checkpoint.autotrace.added"));
 
         } else if (sub.equalsIgnoreCase("resize")) {
-            Location l1 = pos1.get(player);
-            Location l2 = pos2.get(player);
+            Location l1 = PosSelection.pos1.get(player);
+            Location l2 = PosSelection.pos2.get(player);
 
             if (l1 == null || l2 == null) {
-                player.sendMessage(getMessage("checkpoint.pos.notSet"));
+                player.sendMessage(getMessage("pos.notSet"));
                 return;
             }
 
-            pos1.remove(player);
-            pos2.remove(player);
+            PosSelection.pos1.remove(player);
+            PosSelection.pos2.remove(player);
 
             AutoTraceManager.EditInfo info = autoTraceManager.resizeNearest(player, l1, l2);
             if (info == null) {
@@ -674,17 +637,17 @@ public class CheckpointCommand implements Listener, BasicCommand {
      * stands/pit lane) that rejoin the track without physically crossing the original checkpoint.
      */
     private void handleAddAlternate(Player player, String[] args) {
-        Location l1 = pos1.get(player);
-        Location l2 = pos2.get(player);
+        Location l1 = PosSelection.pos1.get(player);
+        Location l2 = PosSelection.pos2.get(player);
 
         if (l1 == null || l2 == null) {
-            player.sendMessage(getMessage("checkpoint.pos.notSet"));
+            player.sendMessage(getMessage("pos.notSet"));
             return;
         }
 
         Race race = raceManager.getRace(args[1]);
         if (race == null) {
-            player.sendMessage(Messages.getMessage("race.notFound"));
+            player.sendMessage(getMessage("race.notFound"));
             return;
         }
 
@@ -702,8 +665,8 @@ public class CheckpointCommand implements Listener, BasicCommand {
             return;
         }
 
-        pos1.remove(player);
-        pos2.remove(player);
+        PosSelection.pos1.remove(player);
+        PosSelection.pos2.remove(player);
 
         Vector span = l2.toVector().subtract(l1.toVector());
         Vector rawNormal = new Vector(-span.getZ(), 0, span.getX());
@@ -732,7 +695,7 @@ public class CheckpointCommand implements Listener, BasicCommand {
     private void handleClearAll(Player player, String raceName) {
         Race race = raceManager.getRace(raceName);
         if (race == null) {
-            player.sendMessage(Messages.getMessage("race.notFound"));
+            player.sendMessage(getMessage("race.notFound"));
             return;
         }
 

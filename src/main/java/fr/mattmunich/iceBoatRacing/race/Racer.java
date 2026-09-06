@@ -7,7 +7,7 @@ import org.bukkit.entity.Player;
 
 import java.util.*;
 
-public class RaceData {
+public class Racer {
     public Player player;
 
     public boolean racing = false;
@@ -33,8 +33,24 @@ public class RaceData {
     public Race race;
     public Location logoutLocation;
 
-    public RaceData(Player player) {
+    public Racer(Player player) {
         this.player = player;
+    }
+
+    public Player getPlayer() { return player; }
+
+    public Race getRace() { return race; }
+
+    public int getCompletedLapCount() {
+        return lapCount;
+    }
+
+    public int getCompletedPitStops() {
+        return pitStopsCompleted;
+    }
+
+    public int getScore() {
+        return ((lapCount-1) * getRace().getCheckpoints().size()) + checkpointIndex;
     }
 
     public long bestLapTime() {

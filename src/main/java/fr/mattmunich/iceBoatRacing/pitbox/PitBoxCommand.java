@@ -11,14 +11,15 @@ import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.util.StringUtil;
+import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 import java.util.*;
 
 import static fr.mattmunich.iceBoatRacing.Main.c;
-import static fr.mattmunich.iceBoatRacing.Messages.formatArguments;
-import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
+import static fr.mattmunich.iceBoatRacing.Messages.*;
 
 public class PitBoxCommand implements BasicCommand {
 
@@ -44,7 +45,7 @@ public class PitBoxCommand implements BasicCommand {
 
             Race race = raceManager.getRace(args[1]);
             if (race == null) {
-                sender.sendMessage(Messages.getMessage("race.notFound"));
+                sender.sendMessage(getMessage("race.notFound"));
                 return;
             }
 
@@ -53,7 +54,7 @@ public class PitBoxCommand implements BasicCommand {
         } else if (args.length == 2 && args[0].equalsIgnoreCase("list")) {
             Race race = raceManager.getRace(args[1]);
             if (race == null) {
-                sender.sendMessage(Messages.getMessage("race.notFound"));
+                sender.sendMessage(getMessage("race.notFound"));
                 return;
             }
 
@@ -78,10 +79,13 @@ public class PitBoxCommand implements BasicCommand {
                         .clickEvent(ClickEvent.runCommand("/tp " + box.getCenter().getBlockX() + " "
                                 + box.getCenter().getBlockY() + " " + box.getCenter().getBlockZ()));
 
+                List<String> allowedNames = new ArrayList<>();
+                box.getAllowed().forEach(allowed -> allowedNames.add(Bukkit.getOfflinePlayer(allowed).getName() == null ? getStringMessage("playerNotFound") : Bukkit.getOfflinePlayer(allowed).getName()));
+
                 sender.sendMessage(c(
                         "§e  #" + box.getId() + " §f" + box.getName()
                                 + " §7— §f" + box.getDuration() + "s"
-                                + " §7— §f" + String.join(",", box.getAllowed())
+                                + " §7— §f" + String.join(",", allowedNames)
                                 + " §7— §f" + box.getColor().name()
                                 + " "
                 ).append(editText).append(c(" ")).append(colorText).append(c(" ")).append(removeText).append(c(" ")).append(tpText));
@@ -90,7 +94,7 @@ public class PitBoxCommand implements BasicCommand {
         } else if (args.length == 3 && (args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("delete"))) {
             Race race = raceManager.getRace(args[1]);
             if (race == null) {
-                sender.sendMessage(Messages.getMessage("race.notFound"));
+                sender.sendMessage(getMessage("race.notFound"));
                 return;
             }
 
@@ -118,7 +122,7 @@ public class PitBoxCommand implements BasicCommand {
         } else if (args.length >= 4 && args[0].equalsIgnoreCase("setAllowed")) {
             Race race = raceManager.getRace(args[1]);
             if (race == null) {
-                sender.sendMessage(Messages.getMessage("race.notFound"));
+                sender.sendMessage(getMessage("race.notFound"));
                 return;
             }
 
@@ -136,9 +140,24 @@ public class PitBoxCommand implements BasicCommand {
                 return;
             }
 
-            List<String> allowed = new ArrayList<>(Arrays.asList(args).subList(3, args.length));
+            List<String> allowedNames = new ArrayList<>(Arrays.asList(args).subList(3, args.length));
+            if(allowedNames.getFirst().equals("*")) allowedNames = new ArrayList<>();
+            List<UUID> allowedUUIDs = new ArrayList<>();
 
-            boolean success = pitBoxManager.setAllowed(race, box, allowed);
+            OfflinePlayer[] offlinePlayers = Bukkit.getOfflinePlayers();
+            for  (String allowedName : allowedNames) {
+                Optional<OfflinePlayer> result = Arrays.stream(offlinePlayers)
+                        .filter(off -> Objects.requireNonNull(off.getName()).equalsIgnoreCase(allowedName))
+                        .findFirst();
+                if (result.isPresent()) {
+                    allowedUUIDs.add(result.get().getUniqueId());
+                } else {
+                    sender.sendMessage(getMessage("playerNeverJoined", formatArguments("name",  allowedName)));
+                    return;
+                }
+            }
+
+            boolean success = pitBoxManager.setAllowed(race, box, allowedUUIDs);
             if (!success) {
                 sender.sendMessage(getMessage("error.unknown"));
                 return;
@@ -146,13 +165,13 @@ public class PitBoxCommand implements BasicCommand {
 
             sender.sendMessage(getMessage("pitbox.setAllowed.updated", formatArguments(
                     "id", "" + id,
-                    "players", String.join(", ", allowed)
-            )));
+                    "players", allowedNames.isEmpty() ? "*" : String.join(", ", allowedNames))
+            ));
 
         } else if (args.length == 4 && args[0].equalsIgnoreCase("setColor")) {
             Race race = raceManager.getRace(args[1]);
             if (race == null) {
-                sender.sendMessage(Messages.getMessage("race.notFound"));
+                sender.sendMessage(getMessage("race.notFound"));
                 return;
             }
 
@@ -217,6 +236,10 @@ public class PitBoxCommand implements BasicCommand {
                 }
             }
             case "setallowed" -> {
+                List<String> playerNames = new ArrayList<>();
+                for (OfflinePlayer offlinePlayer : Bukkit.getOfflinePlayers()) {
+                    playerNames.add(offlinePlayer.getName());
+                }
                 if (args.length == 2) {
                     for (Race race : raceManager.races) suggestions.add(race.getName());
                 } else if (args.length == 3) {
@@ -224,8 +247,11 @@ public class PitBoxCommand implements BasicCommand {
                     if (race != null) for (PitBox box : race.getPitBoxes()) suggestions.add("" + box.getId());
                 } else {
                     suggestions.add("*");
-                    for (Player online : Bukkit.getOnlinePlayers()) suggestions.add(online.getName());
-                    for (OfflinePlayer offline : Bukkit.getOfflinePlayers()) suggestions.add(offline.getName());
+                    if(args[args.length-1].isEmpty()) {
+                        suggestions.addAll(playerNames);
+                    } else {
+                        StringUtil.copyPartialMatches(args[args.length-1].toLowerCase(), playerNames, suggestions);
+                    }
                 }
             }
             case "setcolor" -> {

@@ -1,5 +1,6 @@
 package fr.mattmunich.iceBoatRacing.race;
 
+import fr.mattmunich.iceBoatRacing.LiveScoreManager;
 import fr.mattmunich.iceBoatRacing.Main;
 import fr.mattmunich.iceBoatRacing.Messages;
 import fr.mattmunich.iceBoatRacing.cars.Car;
@@ -9,10 +10,8 @@ import fr.mattmunich.iceBoatRacing.pitbox.PitBoxManager;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.title.Title;
-import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
-import org.bukkit.Material;
-import org.bukkit.World;
+import org.bukkit.*;
+import org.bukkit.block.Block;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -23,7 +22,9 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
+import static fr.mattmunich.iceBoatRacing.Main.SPECTATE_ON_FINISH;
 import static fr.mattmunich.iceBoatRacing.Main.c;
+import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
 
 @SuppressWarnings("ResultOfMethodCallIgnored")
 public class RaceManager {
@@ -32,6 +33,7 @@ public class RaceManager {
     private final CarManager carManager;
     private final CheckpointManager checkpointManager;
     public final PitBoxManager pitBoxManager;
+    public final LiveScoreManager liveScoreManager;
     public final List<Race> races = new ArrayList<>();
     public final List<Race> activeRaces = new ArrayList<>();
 
@@ -41,11 +43,12 @@ public class RaceManager {
      */
     public final Map<String, String> unloadedRaces = new HashMap<>();
 
-    public RaceManager(Main main, CarManager carManager, CheckpointManager checkpointManager, PitBoxManager pitBoxManager) {
+    public RaceManager(Main main, CarManager carManager, CheckpointManager checkpointManager, PitBoxManager pitBoxManager, LiveScoreManager liveScoreManager) {
         this.main = main;
         this.carManager = carManager;
         this.checkpointManager = checkpointManager;
         this.pitBoxManager = pitBoxManager;
+        this.liveScoreManager = liveScoreManager;
     }
 
     /**
@@ -117,20 +120,52 @@ public class RaceManager {
                 unloadedRaces.put(worldName, name);
                 continue;
             }
+
             Race race = new Race(name, world);
             race.setRaceManager(this);
             race.setConfig(config);
+
             checkpointManager.loadRaceCheckpoints(race);
             pitBoxManager.loadRacePitBoxes(race);
             carManager.loadCars(race);
+
             int lapCount = config.getInt("lapCount");
             if (lapCount <= 0) {
                 lapCount = 10;
                 main.warn(race.getName() + "'s lap count wasn't found, therefore was set to the default value : 10" );
             }
+
             race.setLapCount(lapCount);
             race.setRequiredPitStops(config.getInt("requiredPitStops", 0));
             race.setStartRotation(config.getInt("startRotation", 0));
+
+            //Lights
+            boolean lightsEnabled = config.getBoolean("lights.enabled", false);
+            if(lightsEnabled) {
+                Location from = new Location(
+                        race.getWorld(),
+                        config.getInt("lights.from.x"),
+                        config.getInt("lights.from.y"),
+                        config.getInt("lights.from.z")
+                );
+
+                Location to = new Location(
+                        race.getWorld(),
+                        config.getInt("lights.to.x"),
+                        config.getInt("lights.to.y"),
+                        config.getInt("lights.to.z")
+                );
+                Block origin = race.getWorld().getBlockAt(0, 0, 0);
+                if(from.getBlock().equals(origin) && to.getBlock().equals(origin)) {
+                    //No values found in the config
+                    race.setLights(new Race.Lights(false, null, null));
+                } else {
+                    Race.Lights lights = new Race.Lights(true, from, to);
+                    race.setLights(lights);
+                }
+            } else {
+                race.setLights(new Race.Lights(false, null, null));
+            }
 
             races.add(race);
             main.log("Race " + name + " has been loaded");
@@ -175,17 +210,48 @@ public class RaceManager {
         Race race = new Race(name, world);
         race.setRaceManager(this);
         race.setConfig(config);
+
         checkpointManager.loadRaceCheckpoints(race);
         pitBoxManager.loadRacePitBoxes(race);
         carManager.loadCars(race);
+
         int lapCount = config.getInt("lapCount");
         if (lapCount <= 0) {
             lapCount = 10;
             main.warn(race.getName() + "'s lap count wasn't found, therefore was set to the default value : 10" );
         }
+
         race.setLapCount(lapCount);
         race.setRequiredPitStops(config.getInt("requiredPitStops", 0));
         race.setStartRotation(config.getInt("startRotation", 0));
+
+        //Lights
+        boolean lightsEnabled = config.getBoolean("lights.enabled", false);
+        if(lightsEnabled) {
+            Location from = new Location(
+                    race.getWorld(),
+                    config.getInt("lights.from.x"),
+                    config.getInt("lights.from.y"),
+                    config.getInt("lights.from.z")
+            );
+
+            Location to = new Location(
+                    race.getWorld(),
+                    config.getInt("lights.to.x"),
+                    config.getInt("lights.to.y"),
+                    config.getInt("lights.to.z")
+            );
+            Block origin = race.getWorld().getBlockAt(0, 0, 0);
+            if(from.getBlock().equals(origin) && to.getBlock().equals(origin)) {
+                //No values found in the config
+                race.setLights(new Race.Lights(false, null, null));
+            } else {
+                Race.Lights lights = new Race.Lights(true, from, to);
+                race.setLights(lights);
+            }
+        } else {
+            race.setLights(new Race.Lights(false, null, null));
+        }
 
         races.add(race);
 
@@ -234,6 +300,7 @@ public class RaceManager {
         config.set("startRotation", race.getStartRotation());
         config.set("requiredPitStops", race.getRequiredPitStops());
         config.set("startRotation", 0);
+        config.set("lights.enabled", false);
 
         try {
             config.save(raceFile);
@@ -267,7 +334,7 @@ public class RaceManager {
             try {
                 config = YamlConfiguration.loadConfiguration(raceFile);
             } catch (Exception e) {
-                main.err("Couldn't save race " + race.getName(),e);
+                main.err("Couldn't load config file for race " + race.getName(),e);
                 return false;
             }
 
@@ -283,9 +350,38 @@ public class RaceManager {
                 lapCount = 10;
                 main.warn(race.getName() + "'s lap count wasn't found, therefore was set to the default value : 10" );
             }
+
             race.setLapCount(lapCount);
             race.setRequiredPitStops(config.getInt("requiredPitStops", 0));
             race.setStartRotation(config.getInt("startRotation", 0));
+
+            //Lights
+            boolean lightsEnabled = config.getBoolean("lights.enabled", false);
+            if(lightsEnabled) {
+                Location from = new Location(
+                        race.getWorld(),
+                        config.getInt("lights.from.x"),
+                        config.getInt("lights.from.y"),
+                        config.getInt("lights.from.z")
+                );
+
+                Location to = new Location(
+                        race.getWorld(),
+                        config.getInt("lights.to.x"),
+                        config.getInt("lights.to.y"),
+                        config.getInt("lights.to.z")
+                );
+                Block origin = race.getWorld().getBlockAt(0, 0, 0);
+                if(from.getBlock().equals(origin) && to.getBlock().equals(origin)) {
+                    //No values found in the config
+                    race.setLights(new Race.Lights(false, null, null));
+                } else {
+                    Race.Lights lights = new Race.Lights(true, from, to);
+                    race.setLights(lights);
+                }
+            } else {
+                race.setLights(new Race.Lights(false, null, null));
+            }
 
             //More like reload from file if file/Race unsynced (not really load)
             carManager.loadCars(race);
@@ -369,16 +465,23 @@ public class RaceManager {
 
     //RaceData management
 
-    public Map<UUID, RaceData> getRacers() {
-        Map<UUID, RaceData> allRacers = new HashMap<>();
+    /**
+     * @return All the racers from every race
+     */
+    public Map<UUID, Racer> getRacers() {
+        Map<UUID, Racer> allRacers = new HashMap<>();
         getRaces().forEach(race -> allRacers.putAll(race.racers));
         return allRacers;
     }
 
-    public RaceData getRacer(@NotNull UUID uniqueId) {
+    public Racer getRacer(@NotNull UUID uniqueId) {
         return getRacers().get(uniqueId);
     }
 
+    /**
+     * @param player The player to check
+     * @return Whether the {@code player} is racing
+     */
     public boolean isRacing(Player player) {
         return getRacers().containsKey(player.getUniqueId()) && getRacers().get(player.getUniqueId()).racing;
     }
@@ -402,52 +505,48 @@ public class RaceManager {
             for (Car car : race.getCars()) {
                 prepareRacer(race, car);
             }
+        } else {
+            race.preparingRace = false;
         }
 
         final int[] timesRun = {0};
         final BukkitTask[] task = new BukkitTask[1];
         task[0] = Bukkit.getScheduler().runTaskTimer(main, () -> {
-            int fromX = config.getInt("lights.from.x",123456789);
-            int fromY = config.getInt("lights.from.y",123456789);
-            int fromZ = config.getInt("lights.from.z",123456789);
-            int toX = config.getInt("lights.to.x",123456789);
-            int toY = config.getInt("lights.to.y",123456789);
-            int toZ = config.getInt("lights.to.z",123456789);
-            boolean raceLightsEnabled = config.getBoolean("lights.enabled");
-            if(fromX == 123456789 || fromY == 123456789 || fromZ == 123456789 || toX == 123456789 || toY == 123456789 || toZ == 123456789) raceLightsEnabled = false;
             String titleContent;
+            Material mat;
             switch (timesRun[0]) {
                 case 0 -> {
                     titleContent = "§45";
-                    if (raceLightsEnabled) fillRegion(race.world, fromX, fromY, fromZ, toX, toY, toZ, Material.BROWN_STAINED_GLASS);
+                    mat = Material.BROWN_STAINED_GLASS;
                 }
                 case 1 -> {
                     titleContent = "§c4";
-                    if (raceLightsEnabled) fillRegion(race.world, fromX, fromY, fromZ, toX, toY, toZ, Material.RED_STAINED_GLASS);
+                    mat = Material.RED_STAINED_GLASS;
                 }
                 case 2 -> {
                     titleContent = "§e3";
-                    if (raceLightsEnabled) fillRegion(race.world, fromX, fromY, fromZ, toX, toY, toZ, Material.ORANGE_STAINED_GLASS);
+                    mat = Material.ORANGE_STAINED_GLASS;
                 }
                 case 3 -> {
                     titleContent = "§22";
-                    if (raceLightsEnabled) fillRegion(race.world, fromX, fromY, fromZ, toX, toY, toZ, Material.YELLOW_STAINED_GLASS);
+                    mat = Material.YELLOW_STAINED_GLASS;
                 }
                 case 4 -> {
                     titleContent = "§a1";
-                    if (raceLightsEnabled) fillRegion(race.world, fromX, fromY, fromZ, toX, toY, toZ, Material.LIME_STAINED_GLASS);
+                    mat = Material.LIME_STAINED_GLASS;
                 }
                 case 5 -> {
                     titleContent = "§3GO!";
-                    if (raceLightsEnabled) fillRegion(race.world, fromX, fromY, fromZ, toX, toY, toZ, Material.GREEN_STAINED_GLASS);
+                    mat = Material.GREEN_STAINED_GLASS;
                 }
                 default -> {
                     titleContent = "§cError";
-                    if (raceLightsEnabled) fillRegion(race.world, fromX, fromY, fromZ, toX, toY, toZ, Material.BLACK_STAINED_GLASS);
+                    mat = Material.BLACK_STAINED_GLASS;
                 }
             }
 
             Title title = Title.title(Objects.requireNonNull(c(titleContent)), Objects.requireNonNull(c("")));
+            if (race.getLights() != null && race.getLights().enabled()) fillRegion(race.world, race.getLights().from(), race.getLights().to(), mat);
 
 
             for(UUID racer : race.racers.keySet()) {
@@ -476,10 +575,10 @@ public class RaceManager {
      * @param car The racer's car
      */
     public void prepareRacer(Race race, Car car) {
-        Map<UUID, RaceData> racers = race.racers;
+        Map<UUID, Racer> racers = race.racers;
         Player owner = Bukkit.getPlayer(car.getOwner());
         if (owner == null) return;
-        RaceData racer = new RaceData(owner);
+        Racer racer = new Racer(owner);
 
         owner.setGameMode(GameMode.ADVENTURE);
         carManager.spawnCar(race, car, owner);
@@ -493,7 +592,8 @@ public class RaceManager {
         racer.race = race;
         racer.player = owner;
 
-        main.liveSidebar.getScore(owner.getName()).resetScore();
+        liveScoreManager.removeRacer(owner);
+        liveScoreManager.addRacer(racer);
         race.racing.add(racer);
         racers.put(owner.getUniqueId(), racer);
     }
@@ -509,7 +609,7 @@ public class RaceManager {
     }
 
     public void prepareRace(CommandSender sender, Race race) {
-        sender.sendMessage(Messages.getMessage("race.prepare", Messages.formatArguments("name", race.getName())));
+        sender.sendMessage(getMessage("race.prepare", Messages.formatArguments("name", race.getName())));
         race.preparingRace = true;
         activeRaces.add(race);
         for (Car car : race.getCars()) {
@@ -521,7 +621,7 @@ public class RaceManager {
     }
 
     public void cancelPrepareRace(CommandSender sender, Race race) {
-        sender.sendMessage(Messages.getMessage("race.cancelPrepare", Messages.formatArguments("name", race.getName())));
+        sender.sendMessage(getMessage("race.cancelPrepare", Messages.formatArguments("name", race.getName())));
         race.preparingRace = false;
         activeRaces.remove(race);
         for (Car car : race.getCars()) {
@@ -552,19 +652,19 @@ public class RaceManager {
         race.preparingRace = false;
         race.hasRaceStarted = false;
 
-        Bukkit.broadcast(Messages.getMessage("race.end", Messages.formatArguments("name", race.getName())));
+        Bukkit.broadcast(getMessage("race.end", Messages.formatArguments("name", race.getName())));
         for (Car car : race.getCars()) {
             Player owner = Bukkit.getPlayer(car.getOwner());
             if (owner == null) continue;
-            RaceData data = race.racers.get(owner.getUniqueId());
+            if (SPECTATE_ON_FINISH) owner.setGameMode(GameMode.SPECTATOR);
+            Racer data = race.racers.get(owner.getUniqueId());
             if (data != null && data.pittingBox != null) pitBoxManager.cancelSession(owner, data.pittingBox);
 
             car.destroy();
             race.racers.remove(owner.getUniqueId());
-
-            main.liveSidebar.getScore(owner.getName()).resetScore();
         }
 
+        liveScoreManager.clear();
         if(!race.racers.isEmpty()) {
             race.racing.clear();
         }
@@ -572,22 +672,27 @@ public class RaceManager {
         race.hasRaceStarted=false;
     }
 
-    private void fillRegion(World world,
-                           int x1, int y1, int z1,
-                           int x2, int y2, int z2,
-                           Material material) {
+    /**
+     * Fills a cuboid region between two locations with the given material.
+     *
+     * @param world    the world in which to fill the region
+     * @param from     the first corner of the region
+     * @param to     the second corner of the region
+     * @param material the material to fill the region with
+     */
+    public void fillRegion(World world, Location from, Location to, Material material) {
+        int minX = Math.min(from.getBlockX(), to.getBlockX());
+        int minY = Math.min(from.getBlockY(), to.getBlockY());
+        int minZ = Math.min(from.getBlockZ(), to.getBlockZ());
 
-        int minX = Math.min(x1, x2);
-        int maxX = Math.max(x1, x2);
-        int minY = Math.min(y1, y2);
-        int maxY = Math.max(y1, y2);
-        int minZ = Math.min(z1, z2);
-        int maxZ = Math.max(z1, z2);
+        int maxX = Math.max(from.getBlockX(), to.getBlockX());
+        int maxY = Math.max(from.getBlockY(), to.getBlockY());
+        int maxZ = Math.max(from.getBlockZ(), to.getBlockZ());
 
         for (int x = minX; x <= maxX; x++) {
             for (int y = minY; y <= maxY; y++) {
                 for (int z = minZ; z <= maxZ; z++) {
-                    world.getBlockAt(x, y, z).setType(material, false);
+                    world.getBlockAt(x, y, z).setType(material);
                 }
             }
         }

@@ -18,7 +18,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scoreboard.*;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
@@ -37,8 +36,9 @@ public final class Main extends JavaPlugin {
     AutoTraceManager autoTraceManager;
     PitBoxManager pitBoxManager;
     PitBoxCreator pitBoxCreator;
+    LiveScoreManager liveScoreManager;
 
-    public Objective liveSidebar;
+//    public Objective liveSidebar;
 
     //Config
     public static GameMode RACING_GAMEMODE;
@@ -63,7 +63,7 @@ public final class Main extends JavaPlugin {
 
         loadCreators();
 
-        if (registerScoreboard()) return;
+//        if (registerScoreboard()) return;
 
         registerCommands();
 
@@ -86,12 +86,12 @@ public final class Main extends JavaPlugin {
         PluginManager pm = Bukkit.getPluginManager();
         pm.registerEvents(new CarListener(raceManager),this);
         pm.registerEvents(new CarCreator(this, raceManager, carManager), this);
-        pm.registerEvents(new Connection(this, raceManager, carManager),this);
-        pm.registerEvents(new CheckpointCommand(checkpointManager, raceManager, autoTraceManager, new RaceCreator(this, raceManager, carManager, carCreator), this),this);
-        pm.registerEvents(new RaceListener(this, raceManager, pitBoxManager),this);
+        pm.registerEvents(new Connection(this, raceManager, carManager, liveScoreManager),this);
+        pm.registerEvents(new RaceListener(this, raceManager, pitBoxManager, liveScoreManager),this);
         pm.registerEvents(new RaceCreator(this, raceManager,carManager,carCreator), this);
         pm.registerEvents(new WorldLoad(this, raceManager), this);
         pm.registerEvents(new PitBoxCreator(this, pitBoxManager), this);
+        pm.registerEvents(new PosSelection(), this);
     }
 
     public void updateConstants() {
@@ -137,9 +137,10 @@ public final class Main extends JavaPlugin {
         checkpointManager = new CheckpointManager(this);
         autoTraceManager = new AutoTraceManager(this, checkpointManager);
         pitBoxManager = new PitBoxManager(this);
+        liveScoreManager = new LiveScoreManager();
 
         //Load race manager
-        raceManager = new RaceManager(this,carManager, checkpointManager, pitBoxManager);
+        raceManager = new RaceManager(this,carManager, checkpointManager, pitBoxManager, liveScoreManager);
         log("Done loading managers!");
 
         //Initalise race manager in car and checkpoint manager
@@ -161,28 +162,28 @@ public final class Main extends JavaPlugin {
 
     public boolean registerScoreboard() {
         log("Registering scoreboard...");
-        ScoreboardManager scoreboardManager = Bukkit.getScoreboardManager();
-        Scoreboard scoreboard = scoreboardManager.getMainScoreboard();
-        Objective tempSidebar = scoreboard.getObjective("live_ice_boat_racing");
-        if(tempSidebar != null) tempSidebar.unregister();
-        try {
-            liveSidebar = scoreboard.registerNewObjective("live_ice_boat_racing", Criteria.DUMMY,getMessage("noPrefix.liveSidebarTitle"));
-        } catch (IllegalArgumentException ignored) {
-            log("Live Sidebar was found, although it should have been unregistered.");
-            liveSidebar = scoreboard.getObjective("live_ice_boat_racing");
-            if(liveSidebar == null) {
-                log("Could not find live sidebar!");
-                Bukkit.getPluginManager().disablePlugin(this);
-                return true;
-            }
-            liveSidebar.displayName(getMessage("noPrefix.liveSidebarTitle"));
-        }
-        if(liveSidebar == null) {
-            log("Could not find live sidebar!");
-            Bukkit.getPluginManager().disablePlugin(this);
-            return true;
-        }
-        liveSidebar.setDisplaySlot(DisplaySlot.SIDEBAR);
+//        ScoreboardManager scoreboardManager = Bukkit.getScoreboardManager();
+//        Scoreboard scoreboard = scoreboardManager.getMainScoreboard();
+//        Objective tempSidebar = scoreboard.getObjective("live_ice_boat_racing");
+//        if(tempSidebar != null) tempSidebar.unregister();
+//        try {
+//            liveSidebar = scoreboard.registerNewObjective("live_ice_boat_racing", Criteria.DUMMY,getMessage("noPrefix.liveSidebarTitle"));
+//        } catch (IllegalArgumentException ignored) {
+//            log("Live Sidebar was found, although it should have been unregistered.");
+//            liveSidebar = scoreboard.getObjective("live_ice_boat_racing");
+//            if(liveSidebar == null) {
+//                log("Could not find live sidebar!");
+//                Bukkit.getPluginManager().disablePlugin(this);
+//                return true;
+//            }
+//            liveSidebar.displayName(getMessage("noPrefix.liveSidebarTitle"));
+//        }
+//        if(liveSidebar == null) {
+//            log("Could not find live sidebar!");
+//            Bukkit.getPluginManager().disablePlugin(this);
+//            return true;
+//        }
+//        liveSidebar.setDisplaySlot(DisplaySlot.SIDEBAR);
         log("Done registering scoreboard!");
         return false;
     }
@@ -191,7 +192,7 @@ public final class Main extends JavaPlugin {
         log("Registering commands...");
         registerCommand("iceboatracing", "Command to manage the plugin", List.of("ibr"), new IBRCommand(this));
         registerCommand("race", "Command to manage the race", new RaceCommand(this, raceManager,raceCreator));
-        registerCommand("checkpoint", "Command to manage checkpoints", new CheckpointCommand(checkpointManager, raceManager, autoTraceManager, new RaceCreator(this, raceManager, carManager, carCreator), this));
+        registerCommand("checkpoint", "Command to manage checkpoints", new CheckpointCommand(checkpointManager, raceManager, autoTraceManager, new RaceCreator(this, raceManager, carManager, carCreator), liveScoreManager));
         registerCommand("car", "Command to manage cars", new CarCommand(carManager,raceManager,carCreator));
         registerCommand("pitbox", "Command to manage pit boxes", new PitBoxCommand(raceManager, pitBoxManager, pitBoxCreator));
         log("Done registering commands!");

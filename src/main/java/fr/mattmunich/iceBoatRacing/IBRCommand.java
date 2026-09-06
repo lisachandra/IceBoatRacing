@@ -33,7 +33,8 @@ public class IBRCommand implements BasicCommand {
 
                 // Reload in-memory data
                 main.raceManager.updateAllRaces();
-                main.registerScoreboard();
+                main.liveScoreManager.clear();
+                main.liveScoreManager = new LiveScoreManager();
                 s.sendMessage(getMessage("prefix").append(c(" §r§bDone reloading!")));
             });
 

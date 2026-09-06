@@ -1,11 +1,12 @@
 package fr.mattmunich.iceBoatRacing.listeners;
 
+import fr.mattmunich.iceBoatRacing.LiveScoreManager;
 import fr.mattmunich.iceBoatRacing.Main;
 import fr.mattmunich.iceBoatRacing.Messages;
 import fr.mattmunich.iceBoatRacing.cars.Car;
 import fr.mattmunich.iceBoatRacing.cars.CarManager;
 import fr.mattmunich.iceBoatRacing.race.Race;
-import fr.mattmunich.iceBoatRacing.race.RaceData;
+import fr.mattmunich.iceBoatRacing.race.Racer;
 import fr.mattmunich.iceBoatRacing.race.RaceManager;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
@@ -17,8 +18,6 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
 
 import static fr.mattmunich.iceBoatRacing.Main.REMOVE_CAR_ON_LOGOUT;
 import static fr.mattmunich.iceBoatRacing.Messages.formatArguments;
@@ -29,11 +28,13 @@ public class Connection implements Listener {
     private final Main main;
     private final RaceManager raceManager;
     private final CarManager carManager;
+    private final LiveScoreManager liveScoreManager;
 
-    public Connection(Main main, RaceManager raceManager, CarManager carManager) {
+    public Connection(Main main, RaceManager raceManager, CarManager carManager, LiveScoreManager liveScoreManager) {
         this.main = main;
         this.raceManager = raceManager;
         this.carManager = carManager;
+        this.liveScoreManager = liveScoreManager;
     }
 
     @EventHandler
@@ -44,7 +45,7 @@ public class Connection implements Listener {
         if (raceManager.races.isEmpty()) return;
 
         for(Race race : raceManager.races) {
-            RaceData racer = race.racers.get(p.getUniqueId());
+            Racer racer = race.racers.get(p.getUniqueId());
             if (racer == null) continue;
             if(race.isPreparing() && race.racers.containsKey(p.getUniqueId())) {
                 //Logs in when race is preparing
@@ -83,7 +84,7 @@ public class Connection implements Listener {
                 //Means player logged out during race and logged back in when it was ended
                 racer.car.destroy();
                 p.teleport(race.getWorld().getSpawnLocation());
-                main.liveSidebar.getScore(p.getName()).resetScore();
+                liveScoreManager.removeRacer(racer);
             }
         }
     }
@@ -94,7 +95,7 @@ public class Connection implements Listener {
         e.quitMessage(getMessage("noPrefix.quit",formatArguments("player", p.getName())));
 
         for (Race race : new ArrayList<>(raceManager.activeRaces)) {
-            RaceData racer = race.racers.get(p.getUniqueId());
+            Racer racer = race.racers.get(p.getUniqueId());
             if(racer == null) return;
             racer.racing = false;
             Car car = racer.car;
@@ -107,11 +108,11 @@ public class Connection implements Listener {
                     }
                 } else {
                     car.destroy();
-                    main.liveSidebar.getScore(p.getName()).resetScore();
+                    liveScoreManager.removeRacer(p);
                     race.racers.remove(p.getUniqueId());
                 }
             } else {
-                main.liveSidebar.getScore(p.getName()).resetScore();
+                liveScoreManager.removeRacer(p);
             }
 
             //Auto end race if the last racer leaves
@@ -120,9 +121,9 @@ public class Connection implements Listener {
                     race.end(true);
                 } catch (Exception err) {
                     switch (err.getMessage()) {
-                        case "NO_RANKING" -> Bukkit.getConsoleSender().sendMessage(Messages.getMessage("race.onEnd.error.noRanking"));
-                        case "NO_RACERS" -> Bukkit.getConsoleSender().sendMessage(Messages.getMessage("race.onEnd.error.noRacers"));
-                        default -> Bukkit.getConsoleSender().sendMessage(Messages.getMessage("error.unknown"));
+                        case "NO_RANKING" -> Bukkit.getConsoleSender().sendMessage(getMessage("race.onEnd.error.noRanking"));
+                        case "NO_RACERS" -> Bukkit.getConsoleSender().sendMessage(getMessage("race.onEnd.error.noRacers"));
+                        default -> Bukkit.getConsoleSender().sendMessage(getMessage("error.unknown"));
                     }
                 }
             }

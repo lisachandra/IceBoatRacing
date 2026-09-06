@@ -422,7 +422,7 @@ Pit Box Creation (PitBoxCreator) — separate flow, run any time after the race 
 1. **`/race prepare`** → `prepareRace()`
    - Sets `preparingRace = true`
    - For each car: `CarManager.spawnCar()` → spawns invulnerable boat, sets custom name, rotates, adds passenger
-   - Creates `RaceData` per player, initializes lap/sector tracking
+   - Creates `Racer` per player, initializes lap/sector tracking
    - Adds to global `live_ice_boat_racing` scoreboard
 
 2. **`/race start`** → `startRace()`
@@ -438,7 +438,7 @@ Pit Box Creation (PitBoxCreator) — separate flow, run any time after the race 
       - Lap < total → `onCompleteLap()` (broadcast, title, best-lap check, scoreboard update)
       - Lap == total → `onFinishRace()` (ranking, gaps, stats, spectate/cleanup, disqualification check)
    - On `SECTOR` → record sector split, broadcast
-   - **Pit box check** runs right after the checkpoint loop, reusing the same `RaceData` lookup — no second listener re-iterating racing boats:
+   - **Pit box check** runs right after the checkpoint loop, reusing the same `Racer` lookup — no second listener re-iterating racing boats:
       - Skip if `pitStopsCompleted >= requiredPitStops` (already done) or the player is mid-stop (`pittingBox != null`)
       - Otherwise, for each unoccupied `PitBox` the player is allowed to use and physically inside: start a session — occupy the box, freeze velocity every tick via a repeating task, run the adaptive countdown title, and on completion increment `pitStopsCompleted` and release the box
 
@@ -662,7 +662,7 @@ IceBoatRacing does **not** currently expose a public Java API for other plugins.
 | `CarManager`        | `saveCar()`, `spawnCar()`, `changeOwner()`, `getAll()`                                                                     |
 | `AutoTraceManager`  | `start()`, `stop()`, `generatePreview()`, `accept()`, `togglePreview()`                                                    |
 | `Race`              | `getCheckpoints()`, `getCars()`, `getPitBoxes()`, `getLapCount()`, `getRequiredPitStops()`, `racers` (Map<UUID, RaceData>) |
-| `RaceData`          | `lapTimes`, `sectorsTimes`, `pitStopsCompleted`, `disqualified`, `bestLapTime()`, `meanLapTime()`, `getRaceTime()`         |
+| `Racer`          | `lapTimes`, `sectorsTimes`, `pitStopsCompleted`, `disqualified`, `bestLapTime()`, `meanLapTime()`, `getRaceTime()`         |
 | `Checkpoint`        | `crosses(Location, Location)`, `contains(Location)`, `getAlternates()`                                                     |
 | `PitBox`            | `contains(Location)`, `isAllowed(String)`, `isOccupied()`, `getColor()`                                                    |
 | `Messages`          | `getMessage(key, args...)`, `formatArguments(...)`                                                                         |

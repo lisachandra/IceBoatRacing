@@ -24,19 +24,23 @@
 #(except titles and messages under the "noPrefix" section)
 prefix: "<b><gradient:#8DABF3:#10CA9A>IBR</gradient><dark_gray> >></b><reset>"
 
-noPrefix:
+liveScore:
   #The title of the scoreboard during a race
-  liveSidebarTitle: "§3-- §b§lCourse de bateaux §3--"
+  title: "§3-- §b§lCourse de bateaux §3--"
+  format: "§b%player% §7- §3Tours: §b%completedLapCount%§3/§b%lapCount% §7- §3Stands: §b%completedPitStops%§3/§b%requiredPitStops%"
+
+noPrefix:
   #Join and leave messages
   join: "§7[§a+§7] §b%player%"
   quit: "§7[§c-§7] §b%player%"
 
+#Messages regarding the setting pos
+pos:
+  1: "§bPos §31§b : §3%x%§b, §3%y%§b, §3%z%§b"
+  2: "§bPos §32§b : §3%x%§b, §3%y%§b, §3%z%§b"
+  notSet: "§cSélectionne les §4deux positions§c d'abord !\n§8ℹ Avec une pelle en bois"
+
 checkpoint:
-  #Messages regarding the checkpoint setting pos
-  pos:
-    1: "§bPos §31§b checkpoint : §3%x%§b, §3%y%§b, §3%z%§b"
-    2: "§bPos §32§b checkpoint : §3%x%§b, §3%y%§b, §3%z%§b"
-    notSet: "§cSélectionne les §4deux positions§c d'abord !\n§8ℹ Avec une pelle en bois"
   #Usage / success messages
   create:
     usage: "§cUtilisation : /checkpoint create [sector|finish] <nomCourse>"
@@ -54,17 +58,18 @@ checkpoint:
   invalid: "§cNuméro de checkpoint invalide"
   noCheckpoint: "§cAucun checkpoint défini"
 
-  #Main /checkpoint help fallback
-  help: "§eSous-commandes de /checkpoint :
-  \n§7- §f/checkpoint list
-  \n§7- §f/checkpoint count
-  \n§7- §f/checkpoint create [sector|finish] <nomCourse>
-  \n§7- §f/checkpoint autotrace start|stop|preview|sector|add|resize|delete|accept|cancel
-  \n§7- §f/checkpoint addAlternate <nomCourse> <idCheckpoint>
-  \n§7- §f/checkpoint view <nomCourse>
-  \n§7- §f/checkpoint remove|delete [nomCourse] [idCheckpoint]
-  \n§7- §f/checkpoint clearAll <nomCourse>
-  \n§7- §f/checkpoint resetData <joueur> <nomCourse>"
+  #/checkpoint  help
+  help: "§3--------- §b§l/checkpoint§r §3---------
+  \n§3->§a list §8-§7 Lister tous les checkpoints
+  \n§3->§a count §8-§7 Afficher le nombre de checkpoints
+  \n§3->§a create [sector|finish] <nomCourse> §8-§7 Créer un checkpoint
+  \n§3->§a autotrace start|stop|preview|sector|add|resize|delete|accept|cancel §8-§7 Auto-tracer le circuit
+  \n§3->§a addAlternate <nomCourse> <idCheckpoint> §8-§7 Ajouter une route alternative
+  \n§3->§a view <nomCourse> §8-§7 Basculer la visibilité des checkpoints
+  \n§3->§a remove|delete [nomCourse] [idCheckpoint] §8-§7 Supprimer un checkpoint
+  \n§3->§a clearAll <nomCourse> §8-§7 Supprimer tous les checkpoints
+  \n§3->§a resetData <joueur> <nomCourse> §8-§7 Réinitialiser le score d'un joueur
+  "
 
 
   #Tags shown in /checkpoint list
@@ -79,16 +84,22 @@ checkpoint:
 
   #Auto-trace (recording/generation) commands
   autotrace:
-    help: "§eCommandes d'auto-traçage :
-    \n§7- §f/checkpoint autotrace start <nomCourse> [espacement] [largeur] [hauteur] [loop|noloop]
-    \n§7- §f/checkpoint autotrace stop
-    \n§7- §f/checkpoint autotrace preview §7(bascule)
-    \n§7- §f/checkpoint autotrace sector §7(clique 2 blocs avec la pelle d'abord)
-    \n§7- §f/checkpoint autotrace add §7(clique 2 blocs pour ajouter un checkpoint manuel)
-    \n§7- §f/checkpoint autotrace resize §7(clique 2 blocs délimitant la bonne largeur)
-    \n§7- §f/checkpoint autotrace delete §7(reste près du checkpoint à supprimer)
-    \n§7- §f/checkpoint autotrace accept
-    \n§7- §f/checkpoint autotrace cancel"
+    help: "§3--------- §b§l/checkpoint autotrace§r §3---------
+    \n§3->§a start <nomCourse> [espacement] [largeur] [hauteur] [loop|noloop] §8-§7 Démarrer l'enregistrement
+    \n§3->§a stop §8-§7 Arrêter l'enregistrement
+    \n§3->§a preview §8-§7 Basculer l'aperçu
+    \n§3->§a sector §8-§7 Marquer un secteur
+    \n§7§oℹ Clique 2 blocs avec la pelle d'abord
+    \n§3->§a add §8-§7 Ajouter un checkpoint manuel
+    \n§7§oℹ Clique 2 blocs pour l'ajouter
+    \n§3->§a resize §8-§7 Redimensionner un checkpoint
+    \n§7§oℹ Clique 2 blocs délimitant la bonne largeur
+    \n§3->§a delete §8-§7 Supprimer un checkpoint
+    \n§7§oℹ Reste près du checkpoint à supprimer
+    \n§3->§a accept §8-§7 Sauvegarder les checkpoints générés
+    \n§3->§a cancel §8-§7 Annuler la session
+    "
+
     usageStart: "§cUtilisation : /checkpoint autotrace start <nomCourse> [espacement] [largeur] [hauteur] [loop|noloop]"
     started: "§aEnregistrement démarré pour la course §f%race%§a. Fais le tour complet du circuit en bateau ou à pied.\n§8ℹ L'enregistrement s'arrête automatiquement une fois de retour près du point de départ, ou fais §f/checkpoint autotrace stop §8manuellement."
     noSession: "§cTu n'as pas de session d'auto-traçage active."
@@ -150,19 +161,25 @@ race:
   deleted: "§aLa course %race% a été supprimée."#Displayed when '/race delete' is used and is successful
 
   #Lap count
-  currentLapCount: "§bLe nombre de tours de la course %race% est défini à §3%lapCount%§b. \n§8ℹ Utilisez /race setLapCount <nom> <nombre>"
+  currentLapCount: "§bLe nombre de tours de la course %race% est défini à §3%lapCount%§b. \n§8ℹ Utilisez §7/race setLapCount <nom> <nombre>"
   updatedLapCount: "§bLe nombre de tours de la course §3%race%§b a été défini à §3%lapCount%§b."
   invalidLapCount: "§cLe nombre de tours entré est invalide."
 
   #Start rotation
   currentStartRotation: "§bL'angle de départ pour la course %race% est défini à §3%startRotation%°§b."
   updatedStartRotation: "§bL'angle de départ pour la course §3%race%§b a été défini à §3%startRotation%°§b."
-  invalidStartRotation: "§cL'angle de départ entré est invalide. §8Utilisez: §70§8-§7360§8 ou §7north§8/§7west§8/§7south§8/§7east"
+  invalidStartRotation: "§cL'angle de départ entré est invalide. §8ℹ Utilisez: §70§8-§7360§8 ou §7north§8/§7west§8/§7south§8/§7east"
 
   #Pit stops
   currentPitStops: "§bLe nombre d'arrêts au stand obligatoires pour la course %race% est défini à §3%pitStops%§b."
   updatedPitStops: "§bLe nombre d'arrêts au stand obligatoires pour la course §3%race%§b a été défini à §3%pitStops%§b."
   invalidPitStops: "§cLe nombre d'arrêts au stand entré est invalide."
+
+  #Lights
+  currentLights: "§bLes feux de départ pour la course %race% sont définis de §3%x1%§b, §3%y1%§b, §3%z1%§b à §3%x2%§b, §3%y2%§b, §3%z2%§b."
+  lightsNotSet: "§cLes feux de départ ne sont pas encore définis."
+  lightsDisabled: "§cLes feux de départ sont désactivés. §8ℹ Réactivez-les dans le fichier de configuration de cette course."
+  updatedLights: "§bLe feux de départ pour la course §3%race%§b ont été définis de §3%x1%§b, §3%y1%§b, §3%z1%§b à §3%x2%§b, §3%y2%§b, §3%z2%§b."
 
   #Help message
   help: "§3--------- §b§l/race§r §3---------
@@ -171,7 +188,11 @@ race:
   \n§7§oℹ Placement automatique des joueurs dans leurs voitures
   \n§3->§a end [nom] §8-§7 Finir la course
   \n§3->§a delete [nom] §8-§7 Supprimer la course
-  \n§3->§a setLapCount [nom] <nombre> §8-§7 Définir le nombre de tours"
+  \n§3->§a setLapCount [nom] <nombre> §8-§7 Définir le nombre de tours
+  \n§3->§a setStartRotation [nom] <0-360 ou n/w/s/e> §8-§7 Définir l'angle de départ
+  \n§3->§a setPitStops [nom] <nombre> §8-§7 Définir le nombre de d'arrêts aux stands requis
+  \n§3->§a setLights [nom] §8-§7 Définir les feux de départ
+  "
 
   #In race events
   onCompleteLap:
@@ -298,12 +319,13 @@ pitbox:
   setColor:
     updated: "§aStand §f#%id%§a couleur définie à §f%color%"
     invalid: "§cCouleur invalide. Choix : §f%availableColors%"
-  help: "§eSous-commandes de /pitbox :
-  \n§7- §f/pitbox create <nomCourse>
-  \n§7- §f/pitbox list <nomCourse>
-  \n§7- §f/pitbox remove <nomCourse> <id>
-  \n§7- §f/pitbox setAllowed <nomCourse> <id> <joueurs...|*>
-  \n§7- §f/pitbox setColor <nomCourse> <id> <couleur>"
+  help: "§3--------- §b§l/pitbox§r §3---------
+  \n§3->§a create <nomCourse> §8-§7 Créer un stand
+  \n§3->§a list <nomCourse> §8-§7 Lister les stands
+  \n§3->§a remove <nomCourse> <id> §8-§7 Supprimer un stand
+  \n§3->§a setAllowed <nomCourse> <id> <joueurs...|*> §8-§7 Définir les joueurs autorisés
+  \n§3->§a setColor <nomCourse> <id> <couleur> §8-§7 Définir la couleur du stand
+  "
 
   create:
     confirm: "confirmer"
@@ -348,6 +370,15 @@ car:
   changedOwner: "§aPropriétaire changé : %owner%"
   removed: "§aVoiture supprimée (id %id%)"
 
+  #Help message
+  help: "§3--------- §b§l/car§r §3---------
+  \n§3->§a create §8-§7 Créer une voiture
+  \n§3->§a list [page] §8-§7 Lister toutes les voitures
+  \n§3->§a changeOwner <id> <nomCourse> <joueur> §8-§7 Changer le propriétaire d'une voiture
+  \n§3->§a remove <id> <nomCourse> §8-§7 Supprimer une voiture
+  \n§3->§a selectRace <nomCourse> §8-§7 Sélectionner la course pour la création de voiture
+  "
+
   #Messages/titles shown in the car creation process
   create:
     1:
@@ -384,5 +415,6 @@ car:
 error:
   invalidNumber: "§cNombre invalide"
   playerNotFound: "§cJoueur introuvable"
+  playerNeverJoined: "§cLe joueur §4%name%§c ne s'est jamais connecté, et est donc introuvable."
   playerToExecuteCommand: "§cTu dois être un joueur pour faire ça."
   unknown: "§cUne erreur inconnue est survenue. Vérifiez s'il y a un message d'erreur dans la console."
