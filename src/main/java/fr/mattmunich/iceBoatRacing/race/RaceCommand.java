@@ -18,8 +18,8 @@ import java.util.Collections;
 import java.util.List;
 
 import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
-import static fr.mattmunich.iceBoatRacing.race.RaceCreator.pos1;
-import static fr.mattmunich.iceBoatRacing.race.RaceCreator.pos2;
+import static fr.mattmunich.iceBoatRacing.PosSelection.pos1;
+import static fr.mattmunich.iceBoatRacing.PosSelection.pos2;
 
 public class RaceCommand implements BasicCommand {
     private final Main main;
@@ -153,8 +153,8 @@ public class RaceCommand implements BasicCommand {
             return;
         }
 
-        // No new positions selected -> show current state instead of updating
         if (pos1.get(p) == null || pos2.get(p) == null) {
+            p.sendMessage(getMessage("pos.notSet"));
             Race.Lights lights = finalRace.getLights();
 
             if (lights == null) {
@@ -182,8 +182,6 @@ public class RaceCommand implements BasicCommand {
             return;
         }
 
-        // Capture the selected positions now — pos1/pos2 maps could change
-        // by the time the scheduled task actually runs.
         Location newPos1 = pos1.get(p);
         Location newPos2 = pos2.get(p);
 
@@ -322,7 +320,7 @@ public class RaceCommand implements BasicCommand {
             races.forEach((race) -> raceList.add(race.getName()));
         } else raceList = List.of("§oNo races defined");
 
-        List<String> baseList = List.of("start","prepare","end","create","delete", "setLapCount","setPitStops","setStartRotation");
+        List<String> baseList = List.of("start","prepare","end","create","delete", "setLapCount","setPitStops","setStartRotation", "setLights");
         if(args.length==0) {
             return baseList;
         } else if(args.length==1) {
@@ -342,6 +340,7 @@ public class RaceCommand implements BasicCommand {
                     || args[0].equalsIgnoreCase("setLapCount")
                     || args[0].equalsIgnoreCase("setPitStops")
                     || args[0].equalsIgnoreCase("setStartRotation")
+                    || args[0].equalsIgnoreCase("setLights")
             )
         ) {
             return raceList;

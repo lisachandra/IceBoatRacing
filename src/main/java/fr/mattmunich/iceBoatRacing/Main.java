@@ -84,7 +84,7 @@ public final class Main extends JavaPlugin {
         pm.registerEvents(new CarCreator(this, raceManager, carManager), this);
         pm.registerEvents(new Connection(this, raceManager, carManager, liveScoreManager),this);
         pm.registerEvents(new RaceListener(this, raceManager, pitBoxManager, liveScoreManager),this);
-        pm.registerEvents(new RaceCreator(this, raceManager,carManager,carCreator), this);
+        pm.registerEvents(new RaceCreator(this, raceManager,carCreator), this);
         pm.registerEvents(new WorldLoad(this, raceManager), this);
         pm.registerEvents(new PitBoxCreator(this, pitBoxManager), this);
         pm.registerEvents(new PosSelection(), this);
@@ -151,7 +151,7 @@ public final class Main extends JavaPlugin {
     private void loadCreators() {
         log("Loading car and race creator...");
         carCreator = new CarCreator(this, raceManager, carManager);
-        raceCreator = new RaceCreator(this,raceManager,carManager,carCreator);
+        raceCreator = new RaceCreator(this,raceManager,carCreator);
         pitBoxCreator = new PitBoxCreator(this, pitBoxManager);
         log("Done loading car and race creator!");
     }
@@ -160,7 +160,7 @@ public final class Main extends JavaPlugin {
         log("Registering commands...");
         registerCommand("iceboatracing", "Command to manage the plugin", List.of("ibr"), new IBRCommand(this));
         registerCommand("race", "Command to manage the race", new RaceCommand(this, raceManager,raceCreator));
-        registerCommand("checkpoint", "Command to manage checkpoints", new CheckpointCommand(checkpointManager, raceManager, autoTraceManager, new RaceCreator(this, raceManager, carManager, carCreator), liveScoreManager));
+        registerCommand("checkpoint", "Command to manage checkpoints", new CheckpointCommand(checkpointManager, raceManager, autoTraceManager, new RaceCreator(this, raceManager, carCreator), liveScoreManager));
         registerCommand("car", "Command to manage cars", new CarCommand(carManager,raceManager,carCreator));
         registerCommand("pitbox", "Command to manage pit boxes", new PitBoxCommand(raceManager, pitBoxManager, pitBoxCreator));
         log("Done registering commands!");

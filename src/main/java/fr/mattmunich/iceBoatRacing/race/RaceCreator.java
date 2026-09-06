@@ -2,11 +2,9 @@ package fr.mattmunich.iceBoatRacing.race;
 
 import fr.mattmunich.iceBoatRacing.Main;
 import fr.mattmunich.iceBoatRacing.cars.CarCreator;
-import fr.mattmunich.iceBoatRacing.cars.CarManager;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -23,7 +21,6 @@ import static fr.mattmunich.iceBoatRacing.Messages.formatArguments;
 import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
 import static fr.mattmunich.iceBoatRacing.Messages.getStringMessage;
 
-@SuppressWarnings("unused")
 public class RaceCreator implements Listener {
 
     /*
@@ -47,7 +44,7 @@ public class RaceCreator implements Listener {
     private final RaceManager raceManager;
     private final CarCreator carCreator;
 
-    public RaceCreator(Main main, RaceManager raceManager, CarManager carManager, CarCreator carCreator) {
+    public RaceCreator(Main main, RaceManager raceManager, CarCreator carCreator) {
         this.main = main;
         this.raceManager = raceManager;
         this.carCreator = carCreator;
@@ -78,15 +75,6 @@ public class RaceCreator implements Listener {
      * @apiNote Work in progress
      */
     public static final Map<Player, String> definingCars = new HashMap<>();
-
-    /**
-     * 1st position of the checkpoint (like WorldEdit)
-     */
-    static final Map<Player, Location> pos1 = new HashMap<>();
-    /**
-     * 2nd position of the checkpoint (like WorldEdit)
-     */
-    static final Map<Player, Location> pos2 = new HashMap<>();
 
     // --------------------------------
     //              STEP 1
@@ -410,8 +398,6 @@ public class RaceCreator implements Listener {
     private void endRaceCreation(Player p) {
         creatingRace.remove(p);
         tempRace.remove(p);
-        pos1.remove(p);
-        pos2.remove(p);
 
         String donePath = "race.create.done.";
         Title title = Title.title(
@@ -467,8 +453,6 @@ public class RaceCreator implements Listener {
         Race race = tempRace.get(p);
         creatingRace.remove(p);
         tempRace.remove(p);
-        pos1.remove(p);
-        pos2.remove(p);
         Bukkit.getScheduler().runTask(main, () -> {
             if (race == null) {
                 p.sendMessage(getMessage("error.unknown"));
