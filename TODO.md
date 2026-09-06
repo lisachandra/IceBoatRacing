@@ -8,6 +8,11 @@
 * Unless there is something more written next to it
   * <s> Example</s> <b>UPDATE</b>: Some example   
 ---
+* Pitboxes
+	* Switch from name check to UUID
+* Live scoreboard
+	* Add pitboxes and lap count
+	* Remove racer on finish (cause when there are a lot of racers you can't see the last ones)
 * Allow to convert legacy `config.yml` races to  new `races/[race].yml` 
 	* (Planned, but people will have to redefine checks anyway, soo not so sure that it will be done)
 * Encourage people to use the new `PLANE` checkpoints
