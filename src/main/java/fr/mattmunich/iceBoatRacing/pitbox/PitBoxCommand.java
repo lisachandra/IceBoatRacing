@@ -191,7 +191,7 @@ public class PitBoxCommand implements BasicCommand {
             try {
                 color = PitBoxColor.valueOf(args[3].toUpperCase());
             } catch (IllegalArgumentException e) {
-                sender.sendMessage(getMessage("pitbox.setColor.invalid", formatArguments("availableColors", PitBoxColor.values())));
+                sender.sendMessage(getMessage("pitbox.setColor.invalid", formatArguments("availableColors", String.join("", PitBoxColor.names()))));
                 return;
             }
 

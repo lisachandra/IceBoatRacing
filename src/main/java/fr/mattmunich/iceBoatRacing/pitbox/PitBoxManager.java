@@ -18,6 +18,7 @@ import org.bukkit.scheduler.BukkitTask;
 import java.io.IOException;
 import java.util.*;
 
+import static fr.mattmunich.iceBoatRacing.Main.err;
 import static fr.mattmunich.iceBoatRacing.Messages.*;
 
 public class PitBoxManager {
@@ -66,7 +67,7 @@ public class PitBoxManager {
         try {
             race.saveConfig();
         } catch (IOException e) {
-            main.err("Couldn't save pit box " + id + " for race " + race.getName() + " because its config threw an error on saving.", e);
+            err("Couldn't save pit box " + id + " for race " + race.getName() + " because its config threw an error on saving.", e);
             return null;
         }
 
@@ -90,7 +91,7 @@ public class PitBoxManager {
         try {
             race.saveConfig();
         } catch (IOException e) {
-            main.err("Couldn't update allowed list for pit box " + box.getId() + " on race " + race.getName() + " because its config threw an error on saving.", e);
+            err("Couldn't update allowed list for pit box " + box.getId() + " on race " + race.getName() + " because its config threw an error on saving.", e);
             return false;
         }
 
@@ -110,7 +111,7 @@ public class PitBoxManager {
         try {
             race.saveConfig();
         } catch (IOException e) {
-            main.err("Couldn't update color for pit box " + box.getId() + " on race " + race.getName() + " because its config threw an error on saving.", e);
+            err("Couldn't update color for pit box " + box.getId() + " on race " + race.getName() + " because its config threw an error on saving.", e);
             return false;
         }
 
@@ -131,7 +132,7 @@ public class PitBoxManager {
         try {
             race.saveConfig();
         } catch (IOException e) {
-            main.err("Couldn't remove pit box " + box.getId() + " for race " + race.getName() + " because its config threw an error on saving.", e);
+            err("Couldn't remove pit box " + box.getId() + " for race " + race.getName() + " because its config threw an error on saving.", e);
             return false;
         }
         return race.removePitBox(box);
@@ -271,6 +272,7 @@ public class PitBoxManager {
         if (box != null) box.setOccupant(null);
     }
 
+    @SuppressWarnings("unused")
     public boolean hasActiveSession(Player player) {
         return activeSessions.containsKey(player.getUniqueId());
     }

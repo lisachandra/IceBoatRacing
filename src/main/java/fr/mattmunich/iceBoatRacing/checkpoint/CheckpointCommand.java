@@ -112,8 +112,10 @@ public class CheckpointCommand implements BasicCommand {
             }
 
             boolean nowOn = checkpointManager.toggleViewCheckpoints(p, race);
-            String identifier = nowOn ? "checkpoint.view.on" : "checkpoint.view.off";
-            p.sendMessage(getMessage(identifier,formatArguments("race", race.getName())));
+            p.sendMessage(getMessage(
+                    nowOn ? "checkpoint.view.on" : "checkpoint.view.off",
+                    formatArguments("race", race.getName())
+            ));
         } else if (args.length <= 2 && args[0].equalsIgnoreCase("list")) {
             Map<Race, List<Checkpoint>> all = checkpointManager.getAll();
 
@@ -756,6 +758,11 @@ public class CheckpointCommand implements BasicCommand {
                 if (args.length == 2) {
                     for (int i = 0; i < checkpointManager.count(); i++) suggestions.add("" + i);
                 } else if (args.length == 3) {
+                    for (Race race : raceManager.races) suggestions.add(race.getName());
+                }
+            }
+            case "view", "clearall", "count", "getid", "list" -> {
+                if (args.length == 2) {
                     for (Race race : raceManager.races) suggestions.add(race.getName());
                 }
             }

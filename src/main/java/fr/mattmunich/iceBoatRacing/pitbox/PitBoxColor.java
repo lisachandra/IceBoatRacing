@@ -1,5 +1,7 @@
 package fr.mattmunich.iceBoatRacing.pitbox;
 
+import java.util.stream.Stream;
+
 public enum PitBoxColor {
     //Basic colors
     RED("<bold><color:#FF5555>", "</color></bold>"),
@@ -32,6 +34,15 @@ public enum PitBoxColor {
         this.tagPrefix = tagPrefix;
         this.tagSuffix = tagSuffix;
     }
+
+    // Source - https://stackoverflow.com/a/30587868
+    // Posted by Kris Boyd
+    // Retrieved 2026-10-24, License - CC BY-SA 3.0
+
+    public static String[] names() {
+        return Stream.of(PitBoxColor.values()).map(PitBoxColor::name).toArray(String[]::new);
+    }
+
 
     public String getTagPrefix() { return tagPrefix; }
     public String getTagSuffix() { return tagSuffix; }

@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static fr.mattmunich.iceBoatRacing.Main.c;
+import static fr.mattmunich.iceBoatRacing.Main.severe;
 
 public class Messages {
 
@@ -107,7 +108,9 @@ public class Messages {
         Map<String, Object> map = new HashMap<>();
 
         for (int i = 0; i < args.length; i += 2) {
-            map.put(args[i].toString(), args[i + 1]);
+            String key = args[i].toString();
+            Object value = args[i + 1];
+            map.put(key, value);
         }
 
         return map;
@@ -130,14 +133,18 @@ public class Messages {
 
     public static Component getMessage(String identifier, Map<String, Object> arguments) {
 
-        if (!langConfig.contains(identifier)) {
-            main.getLogger().severe("Missing message: " + identifier);
-            return c("§cMESSAGE NOT FOUND");
-        }
+//        Trying without that
+//        if (!langConfig.contains(identifier)) {
+//            severe("Missing message: " + identifier);
+//            return c("§cMESSAGE NOT FOUND");
+//        }
 
         String message = langConfig.getString(identifier);
 
-        if (message == null) return c("§cMESSAGE NOT FOUND");
+        if (message == null) {
+            severe("Missing message: " + identifier);
+            return c("§cMESSAGE NOT FOUND");
+        }
 
         // Replace placeholders
         for (Map.Entry<String, Object> entry : arguments.entrySet()) {

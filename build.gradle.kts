@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "fr.mattmunich"
-version = "2.2-RELEASE"
+version = "2.3-RELEASE"
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(21))

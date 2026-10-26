@@ -407,6 +407,7 @@ car:
       message: "§bThe car has been saved!"
       title: "§2§lDone!"
       subtitle: "§aCar saved"
+      carIsNull: "§4Could not get the boat.§c Please try again. If the issue persists, please reload the plugin or restart the server."
 
     error:
       ownerAlreadyHasCar: "§cThis car's owner already has a car, remove it first."

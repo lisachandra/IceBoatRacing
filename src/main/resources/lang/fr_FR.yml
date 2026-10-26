@@ -407,6 +407,7 @@ car:
       message: "§bLa voiture a été sauvegardée!"
       title: "§2§lTerminé !"
       subtitle: "§aVoiture sauvegardée"
+      carIsNull: "§4Impossible d'obtenir le bateau.§c Essayez de recommencer, si l'erreur persiste, rechargez le plugin ou redémarrez le serveur."
 
     error:
       ownerAlreadyHasCar: "§cLe propriétaire de cette voiture a déjà une voiture, supprimez-la d'abord."

@@ -254,7 +254,7 @@ public class PitBoxCreator implements Listener {
                 getMessage("pitbox.create.5.subtitle")
         );
         p.showTitle(title);
-        p.sendMessage(getMessage("pitbox.create.5.message", formatArguments("availableColors", PitBoxColor.values())));
+        p.sendMessage(getMessage("pitbox.create.5.message", formatArguments("availableColors", String.join("", PitBoxColor.names()))));
     }
 
     @EventHandler
@@ -277,7 +277,7 @@ public class PitBoxCreator implements Listener {
             try {
                 color = PitBoxColor.valueOf(message.toUpperCase());
             } catch (IllegalArgumentException ex) {
-                p.sendMessage(getMessage("pitbox.create.5.invalid", formatArguments("availableColors", PitBoxColor.values())));
+                p.sendMessage(getMessage("pitbox.create.5.invalid", formatArguments("availableColors", String.join("", PitBoxColor.names()))));
                 return;
             }
 

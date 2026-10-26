@@ -215,6 +215,12 @@ public class CarCreator implements Listener {
             return;
         }
 
+        if (tempCar.get(p) == null) {
+            p.sendMessage(getMessage("car.create.completed.carIsNull"));
+            cleanup(p);
+            return;
+        }
+
         // FINAL SAVE
         carManager.saveCar(
                 race,

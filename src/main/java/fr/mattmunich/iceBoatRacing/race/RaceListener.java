@@ -20,17 +20,16 @@ import java.util.Map;
 import java.util.Objects;
 
 import static fr.mattmunich.iceBoatRacing.Main.*;
+import static fr.mattmunich.iceBoatRacing.Main.warn;
 import static fr.mattmunich.iceBoatRacing.Messages.*;
 
 public class RaceListener implements Listener {
 
-    private final Main main;
     private final RaceManager raceManager;
     private final PitBoxManager pitBoxManager;
     private final LiveScoreManager liveScoreManager;
 
-    public RaceListener(Main main, RaceManager raceManager, PitBoxManager pitBoxManager, LiveScoreManager liveScoreManager) {
-        this.main = main;
+    public RaceListener(RaceManager raceManager, PitBoxManager pitBoxManager, LiveScoreManager liveScoreManager) {
         this.raceManager = raceManager;
         this.pitBoxManager = pitBoxManager;
         this.liveScoreManager = liveScoreManager;
@@ -85,7 +84,7 @@ public class RaceListener implements Listener {
                 Checkpoint afterNextCheckpoint = race.getCheckpoint(afterNextCheckpointID);
 
                 if(afterNextCheckpoint == null || !afterNextCheckpoint.crosses(from, to)) break;
-                main.warn("Allowed " + player.getName() + " to skip checkpoint " + nextCheckpoint.getId() + " as they crossed checkpoint " + afterNextCheckpoint.getId()
+                warn("Allowed " + player.getName() + " to skip checkpoint " + nextCheckpoint.getId() + " as they crossed checkpoint " + afterNextCheckpoint.getId()
                         + "\nIf this happens often, please check your server performances and if the player has an unstable connection or some kind of cheats.");
                 long now = System.currentTimeMillis();
 
@@ -182,7 +181,7 @@ public class RaceListener implements Listener {
                         case "NO_RACERS" -> Bukkit.getConsoleSender().sendMessage(getMessage("race.onEnd.error.noRacers"));
                         default -> {
                             Bukkit.getConsoleSender().sendMessage(getMessage("error.unknown"));
-                            main.err("Could not send ranking on race end", e);
+                            err("Could not send ranking on race end", e);
                         }
                     }
                 }

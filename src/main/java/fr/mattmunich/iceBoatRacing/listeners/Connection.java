@@ -18,7 +18,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.ArrayList;
 
-import static fr.mattmunich.iceBoatRacing.Main.REMOVE_CAR_ON_LOGOUT;
+import static fr.mattmunich.iceBoatRacing.Main.*;
 import static fr.mattmunich.iceBoatRacing.Messages.formatArguments;
 import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
 
@@ -59,16 +59,19 @@ public class Connection implements Listener {
                 if (p.getVehicle() != null) p.getVehicle().remove();
                 p.teleport(car[0].getStartingLocation());
 
-                raceManager.prepareRacer(race, car[0]);
-
-
+                try {
+                    raceManager.prepareRacer(race, car[0]);
+                } catch (Exception ex) {
+                    err("Couldn't prepare " + p.getName() + " for the race " + race.getName() +  " when they rejoined", ex);
+                    p.sendMessage(getMessage("error.unknown"));
+                }
             } else if (race.hasStarted() && race.racers.containsKey(p.getUniqueId()) && main.getConfig().getBoolean("allowRejoin")) {
                 //Logs back in when race is still going
                 p.setGameMode(GameMode.ADVENTURE);
 
                 Location logOutLocation = racer.getLogoutLocation();
                 if(logOutLocation == null) {
-                    main.warn("Couldn't put " + p.getName() + " back in it's car after logging back in because the log out location was null.");
+                    warn("Couldn't put " + p.getName() + " back in it's car after logging back in because the log out location was null.");
                     return;
                 }
                 p.teleport(logOutLocation);

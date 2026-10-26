@@ -1,5 +1,6 @@
 package fr.mattmunich.iceBoatRacing.race;
 
+import fr.mattmunich.iceBoatRacing.Result;
 import fr.mattmunich.iceBoatRacing.cars.Car;
 import fr.mattmunich.iceBoatRacing.checkpoint.Checkpoint;
 import fr.mattmunich.iceBoatRacing.pitbox.PitBox;
@@ -94,8 +95,8 @@ public class Race {
 
 
     //All the start/end and so on things
-    public void start() {
-        raceManager.startRace(this);
+    public Result start() {
+        return raceManager.startRace(this);
     }
 
     /**

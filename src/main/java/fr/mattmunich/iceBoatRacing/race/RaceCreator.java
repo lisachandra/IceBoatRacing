@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import static fr.mattmunich.iceBoatRacing.Main.s;
+import static fr.mattmunich.iceBoatRacing.Main.warn;
 import static fr.mattmunich.iceBoatRacing.Messages.formatArguments;
 import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
 import static fr.mattmunich.iceBoatRacing.Messages.getStringMessage;
@@ -127,7 +128,7 @@ public class RaceCreator implements Listener {
             Race race = new Race(message, p.getWorld());
             raceManager.createRace(race);
             tempRace.put(p, raceManager.getRace(message));
-            main.log("Created race " + race + " with name " + race.getName());
+            main.log("Created race " + race.getName() + " with name " + race.getName());
 
             p.sendMessage(getMessage(
                     "race.create.1.completed",
@@ -175,7 +176,7 @@ public class RaceCreator implements Listener {
             try {
                 tempRace.get(p).saveConfig();
             } catch (IOException ignored) {
-                main.warn("Could not save race config when defining lap count on race creation.");
+                warn("Could not save race config when defining lap count on race creation.");
             }
         });
 
@@ -456,7 +457,7 @@ public class RaceCreator implements Listener {
         Bukkit.getScheduler().runTask(main, () -> {
             if (race == null) {
                 p.sendMessage(getMessage("error.unknown"));
-                main.warn("Couldn't delete race for " + p.getName() + " because it didn't exist (race creating process - cancel clean up)");
+                warn("Couldn't delete race for " + p.getName() + " because it didn't exist (race creating process - cancel clean up)");
             } else {
                 p.performCommand("checkpoint autotrace cancel --noRestart");
                 raceManager.deleteRace(race);

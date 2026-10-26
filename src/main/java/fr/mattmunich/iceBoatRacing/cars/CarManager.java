@@ -18,16 +18,12 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.*;
 
-import static fr.mattmunich.iceBoatRacing.Main.c;
-import static fr.mattmunich.iceBoatRacing.Main.s;
+import static fr.mattmunich.iceBoatRacing.Main.*;
 
 public class CarManager {
-    private final Main main;
     private RaceManager raceManager;
 
-    public CarManager(Main main) {
-        this.main = main;
-    }
+    public CarManager() {}
 
     public void setRaceManager(RaceManager raceManager) {
         this.raceManager = raceManager;
@@ -64,7 +60,7 @@ public class CarManager {
         try {
             race.saveConfig();
         } catch (IOException e) {
-            main.err("Couldn't rename car " + car.getId() + " for race " + race.getName(),e);
+            err("Couldn't rename car " + car.getId() + " for race " + race.getName(),e);
             return false;
         }
 
@@ -150,7 +146,7 @@ public class CarManager {
         try {
             race.saveConfig();
         } catch (IOException e) {
-            main.err("Couldn't save car " + id + " for race " + race.getName() + " because the it's config threw an error on saving. ",e);
+            err("Couldn't save car " + id + " for race " + race.getName() + " because the it's config threw an error on saving. ",e);
         }
 
         race.addCar(new Car(id, owner, startingLocation, boatItem.getType(), s(boatItem.getItemMeta().customName())));
@@ -226,7 +222,7 @@ public class CarManager {
         try {
             race.saveConfig();
         } catch (IOException e) {
-            main.err("Couldn't remove car " + car.getId() + " for race " + race.getName(),e);
+            err("Couldn't remove car " + car.getId() + " for race " + race.getName(),e);
             return false;
         }
         return race.removeCar(car);

@@ -2,21 +2,23 @@ package fr.mattmunich.iceBoatRacing.race;
 
 import fr.mattmunich.iceBoatRacing.Main;
 import fr.mattmunich.iceBoatRacing.Messages;
+import fr.mattmunich.iceBoatRacing.Result;
 import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.util.StringUtil;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 
+import static fr.mattmunich.iceBoatRacing.Main.err;
 import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
 import static fr.mattmunich.iceBoatRacing.PosSelection.pos1;
 import static fr.mattmunich.iceBoatRacing.PosSelection.pos2;
@@ -41,7 +43,8 @@ public class RaceCommand implements BasicCommand {
             Race race = parsedResult.race();
 
             sender.sendMessage(getMessage("race.start", Messages.formatArguments("race", race.getName())));
-            race.start();
+            Result result = race.start();
+            if(result == Result.ERROR) sender.sendMessage(getMessage("error.unknown"));
         } else if(args.length >= 1 && args[0].equalsIgnoreCase("end")) {
             ParsedResult parsedResult = parseRace(args, sender);
             if (parsedResult == null) return;
@@ -55,7 +58,7 @@ public class RaceCommand implements BasicCommand {
                     case "NO_RACERS" -> sender.sendMessage(getMessage("race.onEnd.error.noRacers"));
                     default -> {
                         sender.sendMessage(getMessage("error.unknown"));
-                        main.err("Could not send ranking on /race end", e);
+                        err("Could not send ranking on /race end", e);
                     }
                 }
             }
@@ -313,6 +316,9 @@ public class RaceCommand implements BasicCommand {
 
     @Override
     public @NonNull Collection<String> suggest(@NonNull CommandSourceStack commandSourceStack, String @NonNull [] args) {
+        List<String> suggestions = new ArrayList<>();
+        List<String> baseSuggestions = List.of("start","prepare","end","create","delete", "setLapCount","setPitStops","setStartRotation", "setLights");
+
         List<Race> races =  raceManager.getRaces();
         List<String> raceList;
         if(!races.isEmpty()) {
@@ -320,16 +326,11 @@ public class RaceCommand implements BasicCommand {
             races.forEach((race) -> raceList.add(race.getName()));
         } else raceList = List.of("§oNo races defined");
 
-        List<String> baseList = List.of("start","prepare","end","create","delete", "setLapCount","setPitStops","setStartRotation", "setLights");
         if(args.length==0) {
-            return baseList;
+            return baseSuggestions;
         } else if(args.length==1) {
-            List<String> suggestions = new ArrayList<>();
-            baseList.forEach((suggestion) -> {
-                if(args[0] != null && suggestion.contains(args[0])) {
-                    suggestions.add(suggestion);
-                }
-            });
+            if(args[0] == null) return suggestions;
+            StringUtil.copyPartialMatches(args[0], baseSuggestions, suggestions);
             return suggestions;
         } else if(args.length==2
                 && (
@@ -343,20 +344,19 @@ public class RaceCommand implements BasicCommand {
                     || args[0].equalsIgnoreCase("setLights")
             )
         ) {
-            return raceList;
+            StringUtil.copyPartialMatches(args[1], raceList, suggestions);
         } else if (args.length==3) {
             if(args[0].equalsIgnoreCase("setLapCount")) {
-                return List.of("§7<lapCount>");
+                suggestions = List.of("§7<lapCount>");
             } else if(args[0].equalsIgnoreCase("setPitStops")) {
-                return List.of("§7<requiredPitStops>");
+                suggestions = List.of("§7<requiredPitStops>");
             } else if(args[0].equalsIgnoreCase("setStartRotation")) {
-                return List.of("§7<startRotation>", "0-360", "north", "west", "south", "east");
-            } else {
-                return Collections.emptyList();
+                suggestions.add("§7<startRotation>");
+                baseSuggestions = List.of("0-360", "north", "west", "south", "east");
+                StringUtil.copyPartialMatches(args[2], baseSuggestions, suggestions);
             }
-        } else {
-            return Collections.emptyList();
         }
+        return suggestions;
     }
 
     @Override

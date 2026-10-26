@@ -3,6 +3,7 @@ package fr.mattmunich.iceBoatRacing.race;
 import fr.mattmunich.iceBoatRacing.LiveScoreManager;
 import fr.mattmunich.iceBoatRacing.Main;
 import fr.mattmunich.iceBoatRacing.Messages;
+import fr.mattmunich.iceBoatRacing.Result;
 import fr.mattmunich.iceBoatRacing.cars.Car;
 import fr.mattmunich.iceBoatRacing.cars.CarManager;
 import fr.mattmunich.iceBoatRacing.checkpoint.CheckpointManager;
@@ -22,8 +23,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
-import static fr.mattmunich.iceBoatRacing.Main.SPECTATE_ON_FINISH;
-import static fr.mattmunich.iceBoatRacing.Main.c;
+import static fr.mattmunich.iceBoatRacing.Main.*;
 import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
 
 @SuppressWarnings("ResultOfMethodCallIgnored")
@@ -66,13 +66,13 @@ public class RaceManager {
      */
     public void saveAllRaces() {
         if (races.isEmpty()) {
-            main.warn("No races found, therefore none were saved.");
+            warn("No races found, therefore none were saved.");
         } else {
             for (Race race : new ArrayList<>(races)) {
                 try {
                     race.saveConfig();
                 } catch (IOException e) {
-                    main.err("Could not save race " + race.getName(), e);
+                    err("Could not save race " + race.getName(), e);
                 }
             }
         }
@@ -101,14 +101,14 @@ public class RaceManager {
 
         for (File file : Objects.requireNonNull(racesFolder.listFiles())) {
             if (!file.getName().endsWith(".yml")) {
-                main.warn("File " + file.getName() + " wasn't loaded as a race, as it is not a .yml");
+                warn("File " + file.getName() + " wasn't loaded as a race, as it is not a .yml");
                 continue;
             }
             YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
             String name = config.getString("name");
 
             if(name == null) {
-                main.warn("Ignored " + file.getName() + "because it didn't contain any name for the race.");
+                warn("Ignored " + file.getName() + "because it didn't contain any name for the race.");
                 continue;
             }
 
@@ -116,7 +116,7 @@ public class RaceManager {
             String worldName = Objects.requireNonNull(config.getString("world"));
             World world = Bukkit.getWorld(worldName);
             if(world == null) {
-                main.severe("Couldn't load race " + name + " because it's world wasn't found.");
+                severe("Couldn't load race " + name + " because it's world wasn't found.");
                 unloadedRaces.put(worldName, name);
                 continue;
             }
@@ -132,7 +132,7 @@ public class RaceManager {
             int lapCount = config.getInt("lapCount");
             if (lapCount <= 0) {
                 lapCount = 10;
-                main.warn(race.getName() + "'s lap count wasn't found, therefore was set to the default value : 10" );
+                warn(race.getName() + "'s lap count wasn't found, therefore was set to the default value : 10" );
             }
 
             race.setLapCount(lapCount);
@@ -182,13 +182,13 @@ public class RaceManager {
 
         File racesFolder = new File(main.getDataFolder(), "races");
         if (!racesFolder.exists()) {
-            main.severe("The race folder wasn't found, therefore " + raceName + " could not be loaded.");
+            severe("The race folder wasn't found, therefore " + raceName + " could not be loaded.");
             return false;
         }
 
         File file = new File(racesFolder, raceName + ".yml");
         if (!file.exists()) {
-            main.severe("The race " + raceName + "'s file wasn't found and therefore could not be loaded.");
+            severe("The race " + raceName + "'s file wasn't found and therefore could not be loaded.");
             return false;
         }
 
@@ -196,14 +196,14 @@ public class RaceManager {
         String name = config.getString("name");
 
         if(name == null) {
-            main.severe("Race " + file.getName() + " wasn't loaded because it didn't contain any name.");
+            severe("Race " + file.getName() + " wasn't loaded because it didn't contain any name.");
             return false;
         }
 
         String worldName = Objects.requireNonNull(config.getString("world"));
         World world = Bukkit.getWorld(worldName);
         if(world == null) {
-            main.severe("Couldn't load race " + name + " because it's world wasn't found.");
+            severe("Couldn't load race " + name + " because it's world wasn't found.");
             unloadedRaces.put(worldName, name);
             return false;
         }
@@ -218,7 +218,7 @@ public class RaceManager {
         int lapCount = config.getInt("lapCount");
         if (lapCount <= 0) {
             lapCount = 10;
-            main.warn(race.getName() + "'s lap count wasn't found, therefore was set to the default value : 10" );
+            warn(race.getName() + "'s lap count wasn't found, therefore was set to the default value : 10" );
         }
 
         race.setLapCount(lapCount);
@@ -270,13 +270,13 @@ public class RaceManager {
             for (Race race : new ArrayList<>(races)) {
                 boolean success = race.update();
                 if(success) main.log("Race " + race.getName() + " has been updated");
-                else main.warn("Could not update race " + race.getName() + ", see error above.");
+                else warn("Could not update race " + race.getName() + ", see error above.");
                 loadedRaces++;
                 try { race.end(false); } catch (Exception ignored) {}
             }
             main.log("Updated " + loadedRaces + " race(s)!");
         } else {
-            main.warn("No races updated (none were found).");
+            warn("No races updated (none were found).");
         }
     }
 
@@ -288,6 +288,7 @@ public class RaceManager {
      * @param race The race to create
      * @return The created race
      */
+    @SuppressWarnings("UnusedReturnValue")
     public Race createRace(Race race) {
         main.log("Creating race " + race.getName());
         File raceFile = new File(main.getDataFolder(), "races/" + race.getName().replace(" ","_") + ".yml");
@@ -306,7 +307,7 @@ public class RaceManager {
             config.save(raceFile);
             main.log("Race " + race.getName() + " has been saved");
         } catch (IOException e) {
-            main.err("Couldn't create race " + race.getName(),e);
+            err("Couldn't create race " + race.getName(),e);
             return null;
         }
 
@@ -326,7 +327,7 @@ public class RaceManager {
         try {
             File raceFile = new File(main.getDataFolder(), "races/" + race.getName().replace(" ","_") + ".yml");
             if (!raceFile.exists()) {
-                main.warn("Race " + race.getName() + " wasn't updated because it's config file does not exist.");
+                warn("Race " + race.getName() + " wasn't updated because it's config file does not exist.");
                 return false;
             }
 
@@ -334,21 +335,21 @@ public class RaceManager {
             try {
                 config = YamlConfiguration.loadConfiguration(raceFile);
             } catch (Exception e) {
-                main.err("Couldn't load config file for race " + race.getName(),e);
+                err("Couldn't load config file for race " + race.getName(),e);
                 return false;
             }
 
             try {
                 config.save(raceFile);
             } catch (IOException e) {
-                main.err("Couldn't save race " + race.getName(),e);
+                err("Couldn't save race " + race.getName(),e);
                 return false;
             }
 
             int lapCount = config.getInt("lapCount");
             if (lapCount <= 0) {
                 lapCount = 10;
-                main.warn(race.getName() + "'s lap count wasn't found, therefore was set to the default value : 10" );
+                warn(race.getName() + "'s lap count wasn't found, therefore was set to the default value : 10" );
             }
 
             race.setLapCount(lapCount);
@@ -399,7 +400,7 @@ public class RaceManager {
             }
             return true;
         } catch (Exception e) {
-            main.err("An error occurred when updating the race " + race.getName(), e);
+            err("An error occurred when updating the race " + race.getName(), e);
             return false;
         }
     }
@@ -482,6 +483,7 @@ public class RaceManager {
      * @param player The player to check
      * @return Whether the {@code player} is racing
      */
+    @SuppressWarnings("unused")
     public boolean isRacing(Player player) {
         return getRacers().containsKey(player.getUniqueId()) && getRacers().get(player.getUniqueId()).racing;
     }
@@ -492,18 +494,24 @@ public class RaceManager {
      * Starts the inputted {@code race}.
      * @param race The race to start
      */
-    public void startRace(Race race) {
+    public Result startRace(Race race) {
         YamlConfiguration config = getRaceConfig(race);
         if(config == null) {
             main.log("§cCouldn't start race " + race.getName() + " because the race config file didn't exist.");
-            return;
+            return Result.ERROR;
         }
 
         race.startingRace = true;
         activeRaces.add(race);
         if(!race.preparingRace) {
             for (Car car : race.getCars()) {
-                prepareRacer(race, car);
+                try {
+                    Result r = prepareRacer(race, car);
+                    if (r == Result.ERROR) return Result.ERROR;
+                } catch (Exception e) {
+                    err("Couldn't prepare racer", e);
+                    return Result.ERROR;
+                }
             }
         } else {
             race.preparingRace = false;
@@ -561,12 +569,13 @@ public class RaceManager {
 
             }
             if(timesRun[0] == 5) {
-                race.startingRace=false;
-                race.hasRaceStarted=true;
+                race.startingRace = false;
+                race.hasRaceStarted = true;
                 task[0].cancel();
             }
             timesRun[0]++;
         },0L,20L);
+        return Result.SUCCESS;
     }
 
     /**
@@ -574,10 +583,10 @@ public class RaceManager {
      * @param race The race to prepare the racer for
      * @param car The racer's car
      */
-    public void prepareRacer(Race race, Car car) {
+    public Result prepareRacer(Race race, Car car) throws NullPointerException, IllegalArgumentException {
         Map<UUID, Racer> racers = race.racers;
         Player owner = Bukkit.getPlayer(car.getOwner());
-        if (owner == null) return;
+        if (owner == null) return Result.NULL_POINTER;
         Racer racer = new Racer(owner);
 
         owner.setGameMode(GameMode.ADVENTURE);
@@ -596,6 +605,7 @@ public class RaceManager {
         liveScoreManager.addRacer(racer);
         race.racing.add(racer);
         racers.put(owner.getUniqueId(), racer);
+        return Result.SUCCESS;
     }
 
     /**
@@ -616,7 +626,14 @@ public class RaceManager {
             Player owner = Bukkit.getPlayer(car.getOwner());
             if (owner == null) continue;
 
-            prepareRacer(race, car);
+            try {
+                Result r = prepareRacer(race, car);
+                if(r == Result.ERROR) sender.sendMessage(getMessage("error.unknown"));
+            } catch (Exception e) {
+                err("Couldn't prepare racer", e);
+                sender.sendMessage(getMessage("error.unknown"));
+                return;
+            }
         }
     }
 
@@ -664,7 +681,7 @@ public class RaceManager {
             race.racers.remove(owner.getUniqueId());
         }
 
-        liveScoreManager.clear();
+        liveScoreManager.empty();
         if(!race.racers.isEmpty()) {
             race.racing.clear();
         }

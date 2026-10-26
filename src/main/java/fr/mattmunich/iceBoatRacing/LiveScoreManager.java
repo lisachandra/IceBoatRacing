@@ -15,6 +15,10 @@ public class LiveScoreManager {
     private String entryFormat(Racer racer) { return "liveScore-" + racer.getPlayer().getName(); }
 
     public LiveScoreManager() {
+        register();
+    }
+
+    private void register() {
         scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
         Objective tempSidebar = scoreboard.getObjective("IBR.liveScore");
         if(tempSidebar != null) tempSidebar.unregister();
@@ -24,23 +28,44 @@ public class LiveScoreManager {
     }
 
     public void clear() {
-        liveScore.unregister();
+        if (liveScore == null) return;
+        try { liveScore.unregister(); } catch (Exception ignored) {}
         liveScore = null;
     }
 
-    public void addRacer(Racer racer) {
-        Score s = liveScore.getScore(entryFormat(racer));
+    public void empty() {
+        if (liveScore == null) return;
+        try { liveScore.unregister(); } catch (Exception ignored) {}
+        liveScore = null;
+        register();
+    }
+
+    public void addRacer(Racer racer) throws NullPointerException, IllegalArgumentException {
+        if (liveScore == null) {
+            throw new NullPointerException("Couldn't add racer, because the liveScore wasn't found! (this.liveScore is null)");
+        }
+        Score s;
+        try {
+            s = liveScore.getScore(entryFormat(racer));
+        } catch (Exception e) {
+            throw new IllegalArgumentException(e);
+        }
         s.customName(formatScore(racer));
         s.setScore(0);
     }
 
     public void removeRacer(Racer racer) {
+        if (liveScore == null) return;
         Score s = liveScore.getScore(entryFormat(racer));
         s.resetScore();
     }
+
     public void removeRacer(Player racer) {
-        Score s = liveScore.getScore(racer);
-        s.resetScore();
+        if (liveScore == null) return;
+        try {
+            Score s = liveScore.getScore(racer);
+            s.resetScore();
+        } catch (Exception ignored) {}
     }
 
     public void updateRacer(Racer racer) {

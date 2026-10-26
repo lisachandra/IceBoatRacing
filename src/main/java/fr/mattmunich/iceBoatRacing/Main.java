@@ -83,7 +83,7 @@ public final class Main extends JavaPlugin {
         pm.registerEvents(new CarListener(raceManager),this);
         pm.registerEvents(new CarCreator(this, raceManager, carManager), this);
         pm.registerEvents(new Connection(this, raceManager, carManager, liveScoreManager),this);
-        pm.registerEvents(new RaceListener(this, raceManager, pitBoxManager, liveScoreManager),this);
+        pm.registerEvents(new RaceListener(raceManager, pitBoxManager, liveScoreManager),this);
         pm.registerEvents(new RaceCreator(this, raceManager,carCreator), this);
         pm.registerEvents(new WorldLoad(this, raceManager), this);
         pm.registerEvents(new PitBoxCreator(this, pitBoxManager), this);
@@ -129,7 +129,7 @@ public final class Main extends JavaPlugin {
     private void loadManagers() {
         log("Loading managers...");
         //Preload car and checkpoint manager for racemanager
-        carManager = new CarManager(this);
+        carManager = new CarManager();
         checkpointManager = new CheckpointManager(this);
         autoTraceManager = new AutoTraceManager(this, checkpointManager);
         pitBoxManager = new PitBoxManager(this);
@@ -139,10 +139,10 @@ public final class Main extends JavaPlugin {
         raceManager = new RaceManager(this,carManager, checkpointManager, pitBoxManager, liveScoreManager);
         log("Done loading managers!");
 
-        //Initalise race manager in car and checkpoint manager
+        //Initialize race manager in car and checkpoint manager
         carManager.setRaceManager(raceManager);
         checkpointManager.setRaceManager(raceManager);
-        log("Initiazed RaceManager for Car and Checkpoint managers");
+        log("Initialized RaceManager for Car and Checkpoint managers");
 
         //Load races after CarManager and CheckpointManager have RaceManager set and after server startup, so that all worlds are loaded.
         Bukkit.getScheduler().runTask(this, () -> raceManager.loadAllRaces());
@@ -172,15 +172,25 @@ public final class Main extends JavaPlugin {
         raceManager.saveAllRaces();
     }
 
+    public void reload() {
+        loadConfigs(); //reload configs
+        loadMessages(); //reload lang config / change language
+
+        // Reload in-memory data
+        raceManager.updateAllRaces();
+        liveScoreManager.clear();
+        liveScoreManager = new LiveScoreManager();
+    }
+
     public void log(String message) {
         Bukkit.getConsoleSender().sendMessage("[IceBoatRacing] " + message);
     }
 
-    public void err(String message, Exception e) { getLogger().severe("[IceBoatRacing] " + message + "\nStacktrace: "  + e.getMessage() + "\n" + Arrays.toString(e.getStackTrace())); }
+    public static void err(String message, Exception e) { Bukkit.getLogger().severe("[IceBoatRacing] " + message + "\nStacktrace: "  + e.getMessage() + "\n" + Arrays.toString(e.getStackTrace())); }
 
-    public void warn(String message) { getLogger().warning("[IceBoatRacing] " + message); }
+    public static void warn(String message) { Bukkit.getLogger().warning("[IceBoatRacing] " + message); }
 
-    public void severe(String message) { getLogger().severe("[IceBoatRacing] " + message); }
+    public static void severe(String message) { Bukkit.getLogger().severe("[IceBoatRacing] " + message); }
 
     public static Component c(String message) {
         try {

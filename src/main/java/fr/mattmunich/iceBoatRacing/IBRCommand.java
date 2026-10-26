@@ -28,13 +28,7 @@ public class IBRCommand implements BasicCommand {
             if (!s.hasPermission("iceBoatRacing.reload")) return;
             s.sendMessage(getMessage("prefix").append(c(" §r§b§oReloading...")));
             Bukkit.getScheduler().runTask(main, () -> {
-                main.loadConfigs(); //reload configs
-                main.loadMessages(); //reload lang config / change language
-
-                // Reload in-memory data
-                main.raceManager.updateAllRaces();
-                main.liveScoreManager.clear();
-                main.liveScoreManager = new LiveScoreManager();
+                main.reload();
                 s.sendMessage(getMessage("prefix").append(c(" §r§bDone reloading!")));
             });
 
@@ -60,6 +54,8 @@ public class IBRCommand implements BasicCommand {
         }
 
     }
+
+
 
     @Override
     public @NonNull Collection<String> suggest(@NonNull CommandSourceStack commandSourceStack, String @NonNull [] args) {

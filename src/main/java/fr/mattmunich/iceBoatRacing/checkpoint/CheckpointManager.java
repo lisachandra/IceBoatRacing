@@ -15,6 +15,8 @@ import org.bukkit.util.Vector;
 import java.io.IOException;
 import java.util.*;
 
+import static fr.mattmunich.iceBoatRacing.Main.err;
+
 public class CheckpointManager {
 
     private final Main main;
@@ -110,7 +112,7 @@ public class CheckpointManager {
         try {
             race.saveConfig();
         } catch (IOException e) {
-            main.err("Couldn't remove checkpoint " + checkpoint.getId() + " for race " + race.getName() + " because the it's config threw an error on saving. ",e);
+            err("Couldn't remove checkpoint " + checkpoint.getId() + " for race " + race.getName() + " because the it's config threw an error on saving. ",e);
             return false;
         }
         return race.removeCheckpoint(checkpoint);
@@ -146,7 +148,7 @@ public class CheckpointManager {
         try {
             race.saveConfig();
         } catch (IOException e) {
-            main.err("Couldn't save checkpoint " + ID + " for race " + race.getName() + " because the it's config threw an error on saving. ",e);
+            err("Couldn't save checkpoint " + ID + " for race " + race.getName() + " because the it's config threw an error on saving. ",e);
             return null;
         }
 
@@ -180,7 +182,7 @@ public class CheckpointManager {
         try {
             race.saveConfig();
         } catch (IOException e) {
-            main.err("Couldn't save checkpoint " + ID + " for race " + race.getName() + " because the it's config threw an error on saving. ",e);
+            err("Couldn't save checkpoint " + ID + " for race " + race.getName() + " because the it's config threw an error on saving. ",e);
             return null;
         }
 
@@ -240,7 +242,7 @@ public class CheckpointManager {
         try {
             race.saveConfig();
         } catch (IOException e) {
-            main.err("Couldn't save auto-traced checkpoints for race " + race.getName() + " because the it's config threw an error on saving. ", e);
+            err("Couldn't save auto-traced checkpoints for race " + race.getName() + " because the it's config threw an error on saving. ", e);
             return false;
         }
 
@@ -281,7 +283,7 @@ public class CheckpointManager {
         try {
             race.saveConfig();
         } catch (IOException e) {
-            main.err("Couldn't save alternate route for checkpoint " + target.getId() + " on race " + race.getName() + " because the it's config threw an error on saving. ", e);
+            err("Couldn't save alternate route for checkpoint " + target.getId() + " on race " + race.getName() + " because the it's config threw an error on saving. ", e);
             return false;
         }
 
@@ -306,7 +308,7 @@ public class CheckpointManager {
         try {
             race.saveConfig();
         } catch (IOException e) {
-            main.err("Couldn't clear checkpoints for race " + race.getName() + " because the it's config threw an error on saving. ", e);
+            err("Couldn't clear checkpoints for race " + race.getName() + " because the it's config threw an error on saving. ", e);
             return false;
         }
 
