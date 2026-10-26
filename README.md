@@ -7,7 +7,7 @@
 [![Paper](https://img.shields.io/badge/Paper-1.21.4%2B-FF4444?logo=paper)](https://papermc.io)
 [![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk)](https://openjdk.org)
 [![License](https://img.shields.io/github/license/mattmunichYT/IceBoatRacing?color=blue)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-v2.0--RELEASE-light)](https://github.com/mattmunichYT/IceBoatRacing/releases)
+[![Version](https://img.shields.io/badge/Version-v2.2--RELEASE-light)](https://github.com/mattmunichYT/IceBoatRacing/releases)
 
 ---
 
