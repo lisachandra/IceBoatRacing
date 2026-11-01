@@ -12,10 +12,12 @@ import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.util.StringUtil;
 import org.bukkit.util.Vector;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -116,7 +118,7 @@ public class CheckpointCommand implements BasicCommand {
                     nowOn ? "checkpoint.view.on" : "checkpoint.view.off",
                     formatArguments("race", race.getName())
             ));
-        } else if (args.length <= 2 && args[0].equalsIgnoreCase("list")) {
+        } else if (args.length >= 1 && args[0].equalsIgnoreCase("list")) {
             Map<Race, List<Checkpoint>> all = checkpointManager.getAll();
 
             if (all.values().stream().allMatch(List::isEmpty)) {
@@ -132,7 +134,7 @@ public class CheckpointCommand implements BasicCommand {
                 }
             }
 
-            final int PAGE_SIZE = 5;
+            final int PAGE_SIZE = 10;
             int totalPages = (int) Math.ceil((double) entries.size() / PAGE_SIZE);
 
             int page = 1;
@@ -169,10 +171,20 @@ public class CheckpointCommand implements BasicCommand {
                 Location min = checkpoint.getMin();
                 Location max = checkpoint.getMax();
 
+                Component minPos = Component.text(" X:" + min.getBlockX() + " Y:" + min.getBlockY() + " Z:" + min.getBlockZ())
+                        .hoverEvent(HoverEvent.showText(c("Click to copy to clipboard")))
+                        .clickEvent(ClickEvent.copyToClipboard(min.getBlockX() + " " + min.getBlockY() + " " + min.getBlockZ()));
+
+                Component maxPos = Component.text(" X:" + max.getBlockX() + " Y:" + max.getBlockY() + " Z:" + max.getBlockZ())
+                        .hoverEvent(HoverEvent.showText(c("Click to copy to clipboard")))
+                        .clickEvent(ClickEvent.copyToClipboard(max.getBlockX() + " " + max.getBlockY() + " " + max.getBlockZ()));
+
                 Component removeText = Component.text("[x]")
+                        .hoverEvent(HoverEvent.showText(c("Click to delete checkpoint")))
                         .clickEvent(ClickEvent.runCommand("/checkpoint remove " + checkpoint.getId() + " " + race.getName()));
 
                 Component tpText = Component.text("[→]")
+                        .hoverEvent(HoverEvent.showText(c("Click to teleport")))
                         .clickEvent(ClickEvent.runCommand("/tp " + min.getBlockX() + " " + min.getBlockY() + " " + min.getBlockZ()));
 
                 String shapeTag = checkpoint.getShape() == Checkpoint.Shape.PLANE ? getStringMessage("checkpoint.list.planeTag") : "";
@@ -184,11 +196,7 @@ public class CheckpointCommand implements BasicCommand {
                                 + " §7[" + race.getName() + "]"
                                 + shapeTag
                                 + altTag
-                                + " §fX:" + min.getBlockX() + " Y:" + min.getBlockY() + " Z:" + min.getBlockZ()
-                                + " §7→"
-                                + " §fX:" + max.getBlockX() + " Y:" + max.getBlockY() + " Z:" + max.getBlockZ()
-                                + " "
-                ).append(removeText).append(c(" ")).append(tpText));
+                ).append(minPos).append(c(" §7→")).append(maxPos).append(c("§7 | §f")).append(removeText).append(c(" ")).append(tpText));
             }
 
             // Page navigation row
@@ -227,7 +235,7 @@ public class CheckpointCommand implements BasicCommand {
 //            main.liveSidebar.getScore(target.getName()).resetScore();
             liveScoreManager.removeRacer(target);
             p.sendMessage(getMessage("checkpoint.resetPlayerScore",formatArguments("player",p.getName())));
-        } else if (args[0].equalsIgnoreCase("autotrace")) {
+        } else if (args.length >= 1 && args[0].equalsIgnoreCase("autotrace")) {
             handleAutoTrace(p, args);
         } else if (args.length == 3 && args[0].equalsIgnoreCase("addAlternate")) {
             handleAddAlternate(p, args);
@@ -761,9 +769,16 @@ public class CheckpointCommand implements BasicCommand {
                     for (Race race : raceManager.races) suggestions.add(race.getName());
                 }
             }
-            case "view", "clearall", "count", "getid", "list" -> {
+            case "view", "clearall", "count", "getid" -> {
                 if (args.length == 2) {
-                    for (Race race : raceManager.races) suggestions.add(race.getName());
+                    List<String> raceList = new ArrayList<>();
+                    for (Race race : raceManager.races) raceList.add(race.getName());
+
+                    if(args[1] != null) {
+                        StringUtil.copyPartialMatches(args[1], raceList, suggestions);
+                    } else {
+                        suggestions.addAll(raceList);
+                    }
                 }
             }
             case "resetdata" -> {

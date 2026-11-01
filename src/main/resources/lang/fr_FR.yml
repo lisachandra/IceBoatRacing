@@ -71,7 +71,6 @@ checkpoint:
   \n§3->§a resetData <joueur> <nomCourse> §8-§7 Réinitialiser le score d'un joueur
   "
 
-
   #Tags shown in /checkpoint list
   list:
     planeTag: " §7[plan]"
@@ -79,8 +78,8 @@ checkpoint:
 
   #/checkpoint view
   view:
-    on: "§bVisibilité des checkpoints pour la course §3%race%§b: §aactivée"
-    off: "§bVisibilité des checkpoints pour la course §3%race%§b: §cdésactivée"
+    "on": "§bVisibilité des checkpoints pour la course §3%race%§b: §aactivée"
+    "off": "§bVisibilité des checkpoints pour la course §3%race%§b: §cdésactivée"
 
   #Auto-trace (recording/generation) commands
   autotrace:
@@ -198,9 +197,9 @@ race:
   onCompleteLap:
     title: "§6%currentLapCount%/%raceLapCount%"
     subtitle: "§atours complétés"
-    message: "§3%player%§b §8§l>>§r§b tour n°§3%ID%§b terminé en §3%time%§b"
-    messageBestLapTimeYet: "§3%player% §8§l>>§b tour §3%ID%§b terminé en §3%time%§b §7-§f nouveau temps record !"
-  onCrossSector: "§r§3%player%§b §8§l>>§r§b secteur §3%ID%§b: §3%time%§b"
+    message: "§3%player%§b§8§l:§r§b our n°§3%ID%§b terminé en §3%time%§b"
+    messageBestLapTimeYet: "§3%player%§8§l:§b tour §3%ID%§b terminé en §3%time%§b §7-§f nouveau temps record !"
+  onCrossSector: "§r§3%player%§b§8§l:§r§b secteur §3%ID%§b: §3%time%§b"
   onFinish:
     message: "§2%player%§b a terminé la course en §2%time%§a et est classé §2#%ranking%§a !"
     title: "§2Course terminée!"

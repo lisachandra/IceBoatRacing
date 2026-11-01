@@ -6,6 +6,7 @@ import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
@@ -65,15 +66,19 @@ public class PitBoxCommand implements BasicCommand {
             sender.sendMessage(c("§bPit boxes §7— §f" + race.getName() + "§7:"));
             for (PitBox box : boxes) {
                 Component editText = Component.text("[✎]")
+                        .hoverEvent(HoverEvent.showText(c("Click to define allowed players")))
                         .clickEvent(ClickEvent.suggestCommand("/pitbox setAllowed " + race.getName() + " " + box.getId() + " "));
 
                 Component colorText = Component.text("[🎨]")
+                        .hoverEvent(HoverEvent.showText(c("Click to copy to change color")))
                         .clickEvent(ClickEvent.suggestCommand("/pitbox setColor " + race.getName() + " " + box.getId() + " "));
 
                 Component removeText = Component.text("[x]")
+                        .hoverEvent(HoverEvent.showText(c("Click to delete")))
                         .clickEvent(ClickEvent.runCommand("/pitbox remove " + race.getName() + " " + box.getId()));
 
                 Component tpText = Component.text("[→]")
+                        .hoverEvent(HoverEvent.showText(c("Click to teleport")))
                         .clickEvent(ClickEvent.runCommand("/tp " + box.getCenter().getBlockX() + " "
                                 + box.getCenter().getBlockY() + " " + box.getCenter().getBlockZ()));
 
@@ -81,11 +86,11 @@ public class PitBoxCommand implements BasicCommand {
                 box.getAllowed().forEach(allowed -> allowedNames.add(Bukkit.getOfflinePlayer(allowed).getName() == null ? getStringMessage("playerNotFound") : Bukkit.getOfflinePlayer(allowed).getName()));
 
                 sender.sendMessage(c(
-                        "§e  #" + box.getId() + " §f" + box.getName()
+                        "§3  #" + box.getId() + " §b" + box.getName()
                                 + " §7— §f" + box.getDuration() + "s"
                                 + " §7— §f" + String.join(",", allowedNames)
                                 + " §7— §f" + box.getColor().name()
-                                + " "
+                                + " §7 | §f"
                 ).append(editText).append(c(" ")).append(colorText).append(c(" ")).append(removeText).append(c(" ")).append(tpText));
             }
 
@@ -255,8 +260,8 @@ public class PitBoxCommand implements BasicCommand {
     private void suggestRaces(String @NonNull [] args, List<String> pitBoxList, List<String> suggestions) {
         Race race = raceManager.getRace(args[1]);
         if (race != null) race.getPitBoxes().forEach(box -> {
-            pitBoxList.add("" + box.getId());
             pitBoxList.add(box.getName());
+            pitBoxList.add("" + box.getId());
         });
 
         if (args[2] != null) {

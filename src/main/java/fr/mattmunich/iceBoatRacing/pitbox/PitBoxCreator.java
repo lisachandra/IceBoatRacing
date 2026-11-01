@@ -251,7 +251,7 @@ public class PitBoxCreator implements Listener {
 
         try {
             //Try to automatically set the color
-            PitBoxColor color = PitBoxColor.valueOf(tempPitBox.get(p).name);
+            PitBoxColor color = PitBoxColor.valueOf(tempPitBox.get(p).name.toUpperCase());
             tempPitBox.get(p).color = color;
             p.sendMessage(getMessage("pitbox.create.5.completed", formatArguments("color", color.name())));
 

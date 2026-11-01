@@ -6,6 +6,7 @@ import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
@@ -133,7 +134,7 @@ public class CarCommand implements BasicCommand, Listener {
             }
         }
 
-        final int PAGE_SIZE = 5;
+        final int PAGE_SIZE = 10;
         int totalPages = (int) Math.ceil((double) entries.size() / PAGE_SIZE);
 
         int page = 1;
@@ -174,27 +175,30 @@ public class CarCommand implements BasicCommand, Listener {
             if (owner.getName() != null) ownerName = owner.getName();
 
             Component removeText = c("§c[x]")
+                    .hoverEvent(HoverEvent.showText(c("Click to delete")))
                     .clickEvent(ClickEvent.runCommand("/car remove " + car.getId() + " " + race.getName()));
 
             Component tpText = c("§a[→]")
+                    .hoverEvent(HoverEvent.showText(c("Click to teleport")))
                     .clickEvent(ClickEvent.runCommand(
                             "/tp " + loc.getBlockX() + " " + loc.getBlockY() + " " + loc.getBlockZ()
                     ));
 
             Component changeOwnerText = c("§e[✎]")
+                    .hoverEvent(HoverEvent.showText(c("Click to change the car's owner")))
                     .clickEvent(ClickEvent.suggestCommand(
                             "/car changeOwner " + car.getId() + " " + race.getName() + " "
                     ));
 
             Component line = c(
-                    "§e  #" + car.getId()
+                    "§3  #" + car.getId()
                             + " §7Owner: §f" + ownerName
                             + " §7Type: §f" + car.getBoatMaterial().name().replace("_BOAT", "").replace("_RAFT", "").toLowerCase()
-                            + " §7[" + (loc.getWorld() == null ? "§7§oUnknown" : loc.getWorld().getName()) + "]"
+                            + " §7[" + (loc.getWorld() == null ? "§8§oUnknown" : loc.getWorld().getName()) + "]"
                             + " §fX:" + loc.getBlockX()
                             + " Y:" + loc.getBlockY()
                             + " Z:" + loc.getBlockZ()
-                            + " "
+                            + " §7| §f"
             )
                     .append(removeText)
                     .append(c(" "))

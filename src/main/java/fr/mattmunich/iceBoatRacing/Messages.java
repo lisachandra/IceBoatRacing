@@ -41,7 +41,7 @@ public class Messages {
         File langFolder = new File(pluginFolder, "lang");
 
         if (!langFolder.exists()) {
-            main.log("Creating lang folder...");
+            Main.log("Creating lang folder...");
             langFolder.mkdirs();
         }
 
@@ -49,7 +49,7 @@ public class Messages {
 
         // If language file doesn't exist, create it
         if (!langFile.exists()) {
-            main.log("Creating default language file: " + langFile.getName());
+            Main.log("Creating default language file: " + langFile.getName());
 
             try {
                 langFile.createNewFile();
@@ -62,7 +62,7 @@ public class Messages {
 
         langConfig = YamlConfiguration.loadConfiguration(langFile);
 
-        main.log("Loaded language: " + currentLang);
+        Main.log("Loaded language: " + currentLang);
     }
 
     public static Component getMessage(String identifier) {
@@ -132,13 +132,6 @@ public class Messages {
     }
 
     public static Component getMessage(String identifier, Map<String, Object> arguments) {
-
-//        Trying without that
-//        if (!langConfig.contains(identifier)) {
-//            severe("Missing message: " + identifier);
-//            return c("§cMESSAGE NOT FOUND");
-//        }
-
         String message = langConfig.getString(identifier);
 
         if (message == null) {

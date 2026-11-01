@@ -26,7 +26,7 @@ prefix: "<b><gradient:#8DABF3:#10CA9A>IBR</gradient><dark_gray> >></b><reset>"
 
 liveScore:
   #The title of the scoreboard during a race
-  title: "§3-- §b§lOIce Boat Race §3--"
+  title: "§3-- §b§lIce Boat Race §3--"
   format: "§b%player% §7- §3Laps: §b%completedLapCount%§3/§b%lapCount% §7- §3Pits: §b%completedPitStops%§3/§b%requiredPitStops%"
 
 noPrefix:
@@ -79,8 +79,8 @@ checkpoint:
 
   #/checkpoint view
   view:
-    on: "§bCheckpoint visibility for race §3%race%§b: §aenabled"
-    off: "§bCheckpoint visibility for race §3%race%§b: §cdisabled"
+    "on": "§bCheckpoint visibility for race §3%race%§b: §aenabled"
+    "off": "§bCheckpoint visibility for race §3%race%§b: §cdisabled"
 
   #Auto-trace (recording/generation) commands
   autotrace:
