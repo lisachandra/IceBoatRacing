@@ -234,7 +234,7 @@ public class PitBoxCreator implements Listener {
                 if (result.isPresent()) {
                     allowedUUIDs.add(result.get().getUniqueId());
                 } else {
-                    p.sendMessage(getMessage("playerNeverJoined", formatArguments("name",  allowedName)));
+                    p.sendMessage(getMessage("error.playerNeverJoined", formatArguments("name",  allowedName)));
                     return;
                 }
             }
@@ -249,12 +249,22 @@ public class PitBoxCreator implements Listener {
     public void showStep5(Player p) {
         creatingPitBox.put(p, 5);
 
+        try {
+            //Try to automatically set the color
+            PitBoxColor color = PitBoxColor.valueOf(tempPitBox.get(p).name);
+            tempPitBox.get(p).color = color;
+            p.sendMessage(getMessage("pitbox.create.5.completed", formatArguments("color", color.name())));
+
+            endPitBoxCreation(p);
+            return;
+        } catch (IllegalArgumentException ignored) {}
+
         Title title = Title.title(
                 getMessage("pitbox.create.5.title"),
                 getMessage("pitbox.create.5.subtitle")
         );
         p.showTitle(title);
-        p.sendMessage(getMessage("pitbox.create.5.message", formatArguments("availableColors", String.join("", PitBoxColor.names()))));
+        p.sendMessage(getMessage("pitbox.create.5.message", formatArguments("availableColors", String.join(", ", PitBoxColor.names()))));
     }
 
     @EventHandler
@@ -277,7 +287,7 @@ public class PitBoxCreator implements Listener {
             try {
                 color = PitBoxColor.valueOf(message.toUpperCase());
             } catch (IllegalArgumentException ex) {
-                p.sendMessage(getMessage("pitbox.create.5.invalid", formatArguments("availableColors", String.join("", PitBoxColor.names()))));
+                p.sendMessage(getMessage("pitbox.create.5.invalid", formatArguments("availableColors", String.join(", ", PitBoxColor.names()))));
                 return;
             }
 

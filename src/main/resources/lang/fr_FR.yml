@@ -313,11 +313,11 @@ pitbox:
     go: "§a§lEnvoi !"
   noPitBoxes: "§cAucun stand défini pour cette course."
   invalid: "§cNuméro de stand invalide"
-  removed: "§aStand §6%id%§a supprimé"
+  removed: "§aStand §6%name%§a supprimé"
   setAllowed:
-    updated: "§aStand §f#%id%§a mis à jour, autorisé pour : §3%players%"
+    updated: "§aStand §f%name%§a mis à jour, autorisé pour : §3%players%"
   setColor:
-    updated: "§aStand §f#%id%§a couleur définie à §f%color%"
+    updated: "§aStand §f%name%§a couleur définie à §f%color%"
     invalid: "§cCouleur invalide. Choix : §f%availableColors%"
   help: "§3--------- §b§l/pitbox§r §3---------
   \n§3->§a create <nomCourse> §8-§7 Créer un stand

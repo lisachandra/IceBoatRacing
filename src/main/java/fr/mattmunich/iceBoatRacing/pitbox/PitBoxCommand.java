@@ -96,26 +96,16 @@ public class PitBoxCommand implements BasicCommand {
                 return;
             }
 
-            int id;
-            try {
-                id = Integer.parseInt(args[2]);
-            } catch (NumberFormatException e) {
-                sender.sendMessage(getMessage("error.invalidNumber"));
-                return;
-            }
-
-            PitBox box = race.getPitBox(id);
-            if (box == null) {
-                sender.sendMessage(getMessage("pitbox.invalid"));
-                return;
-            }
+            PitBox box = getBox(args, race, sender);
+            if (box == null) return;
+            String name = box.getName();
 
             boolean success = pitBoxManager.remove(race, box);
             if (!success) {
                 sender.sendMessage(getMessage("error.unknown"));
                 return;
             }
-            sender.sendMessage(getMessage("pitbox.removed", formatArguments("id", "" + id)));
+            sender.sendMessage(getMessage("pitbox.removed", formatArguments("name", name)));
 
         } else if (args.length >= 4 && args[0].equalsIgnoreCase("setAllowed")) {
             Race race = raceManager.getRace(args[1]);
@@ -124,19 +114,8 @@ public class PitBoxCommand implements BasicCommand {
                 return;
             }
 
-            int id;
-            try {
-                id = Integer.parseInt(args[2]);
-            } catch (NumberFormatException e) {
-                sender.sendMessage(getMessage("error.invalidNumber"));
-                return;
-            }
-
-            PitBox box = race.getPitBox(id);
-            if (box == null) {
-                sender.sendMessage(getMessage("pitbox.invalid"));
-                return;
-            }
+            PitBox box = getBox(args, race, sender);
+            if (box == null) return;
 
             List<String> allowedNames = new ArrayList<>(Arrays.asList(args).subList(3, args.length));
             if(allowedNames.getFirst().equals("*")) allowedNames = new ArrayList<>();
@@ -162,7 +141,7 @@ public class PitBoxCommand implements BasicCommand {
             }
 
             sender.sendMessage(getMessage("pitbox.setAllowed.updated", formatArguments(
-                    "id", "" + id,
+                    "name", box.getName(),
                     "players", allowedNames.isEmpty() ? "*" : String.join(", ", allowedNames))
             ));
 
@@ -173,25 +152,14 @@ public class PitBoxCommand implements BasicCommand {
                 return;
             }
 
-            int id;
-            try {
-                id = Integer.parseInt(args[2]);
-            } catch (NumberFormatException e) {
-                sender.sendMessage(getMessage("error.invalidNumber"));
-                return;
-            }
-
-            PitBox box = race.getPitBox(id);
-            if (box == null) {
-                sender.sendMessage(getMessage("pitbox.invalid"));
-                return;
-            }
+            PitBox box = getBox(args, race, sender);
+            if (box == null) return;
 
             PitBoxColor color;
             try {
                 color = PitBoxColor.valueOf(args[3].toUpperCase());
             } catch (IllegalArgumentException e) {
-                sender.sendMessage(getMessage("pitbox.setColor.invalid", formatArguments("availableColors", String.join("", PitBoxColor.names()))));
+                sender.sendMessage(getMessage("pitbox.setColor.invalid", formatArguments("availableColors", String.join(", ", PitBoxColor.names()))));
                 return;
             }
 
@@ -201,11 +169,28 @@ public class PitBoxCommand implements BasicCommand {
                 return;
             }
 
-            sender.sendMessage(getMessage("pitbox.setColor.updated", formatArguments("id", "" + id, "color", color.name())));
+            sender.sendMessage(getMessage("pitbox.setColor.updated", formatArguments("name", box.getName(), "color", color.name())));
 
         } else {
             sender.sendMessage(getMessage("pitbox.help"));
         }
+    }
+
+    private static @Nullable PitBox getBox(String @NonNull [] args, Race race, CommandSender sender) {
+        PitBox box;
+        try {
+            int id = Integer.parseInt(args[2]);
+            box = race.getPitBox(id);
+        } catch (NumberFormatException e) {
+            box = race.getPitBox(args[2]);
+        }
+
+
+        if (box == null) {
+            sender.sendMessage(getMessage("pitbox.invalid"));
+            return null;
+        }
+        return box;
     }
 
     @Override
@@ -221,6 +206,8 @@ public class PitBoxCommand implements BasicCommand {
             return suggestions;
         }
 
+        List<String> pitBoxList = new ArrayList<>();
+
         switch (args[0].toLowerCase()) {
             case "create", "list" -> {
                 if (args.length == 2) for (Race race : raceManager.races) suggestions.add(race.getName());
@@ -229,8 +216,7 @@ public class PitBoxCommand implements BasicCommand {
                 if (args.length == 2) {
                     for (Race race : raceManager.races) suggestions.add(race.getName());
                 } else if (args.length == 3) {
-                    Race race = raceManager.getRace(args[1]);
-                    if (race != null) for (PitBox box : race.getPitBoxes()) suggestions.add("" + box.getId());
+                    suggestRaces(args, pitBoxList, suggestions);
                 }
             }
             case "setallowed" -> {
@@ -241,11 +227,10 @@ public class PitBoxCommand implements BasicCommand {
                 if (args.length == 2) {
                     for (Race race : raceManager.races) suggestions.add(race.getName());
                 } else if (args.length == 3) {
-                    Race race = raceManager.getRace(args[1]);
-                    if (race != null) for (PitBox box : race.getPitBoxes()) suggestions.add("" + box.getId());
+                    suggestRaces(args, pitBoxList, suggestions);
                 } else {
                     suggestions.add("*");
-                    if(args[args.length-1].isEmpty()) {
+                    if(args[args.length - 1] != null && args[args.length-1].isEmpty()) {
                         suggestions.addAll(playerNames);
                     } else {
                         StringUtil.copyPartialMatches(args[args.length-1].toLowerCase(), playerNames, suggestions);
@@ -256,21 +241,29 @@ public class PitBoxCommand implements BasicCommand {
                 if (args.length == 2) {
                     for (Race race : raceManager.races) suggestions.add(race.getName());
                 } else if (args.length == 3) {
-                    Race race = raceManager.getRace(args[1]);
-                    if (race != null) for (PitBox box : race.getPitBoxes()) suggestions.add("" + box.getId());
-                } else if (args.length == 4) {
-                    for (PitBoxColor color : PitBoxColor.values()) {
-                        if(args[3] != null && !args[3].isEmpty()) {
-                            if(color.name().toLowerCase().contains(args[3].toLowerCase())) suggestions.add(color.name());
-                        } else {
-                            suggestions.add(color.name());
-                        }
-                    }
+                    suggestRaces(args, pitBoxList, suggestions);
+                } else if (args.length == 4 && args[3] != null) {
+                    List<String> colorNames = Arrays.asList(PitBoxColor.names());
+                    StringUtil.copyPartialMatches(args[3], colorNames, suggestions);
                 }
             }
         }
 
         return suggestions.isEmpty() ? Collections.emptyList() : suggestions;
+    }
+
+    private void suggestRaces(String @NonNull [] args, List<String> pitBoxList, List<String> suggestions) {
+        Race race = raceManager.getRace(args[1]);
+        if (race != null) race.getPitBoxes().forEach(box -> {
+            pitBoxList.add("" + box.getId());
+            pitBoxList.add(box.getName());
+        });
+
+        if (args[2] != null) {
+            StringUtil.copyPartialMatches(args[2], pitBoxList, suggestions);
+        } else {
+            suggestions.addAll(pitBoxList);
+        }
     }
 
     @Override

@@ -313,11 +313,11 @@ pitbox:
     go: "§a§lGo!"
   noPitBoxes: "§cNo pit boxes defined for this race."
   invalid: "§cInvalid pit box number"
-  removed: "§aPit box §6%id%§a removed"
+  removed: "§aPit box §6%name%§a removed"
   setAllowed:
-    updated: "§aPit box §f#%id%§a updated, allowed for: §3%players%"
+    updated: "§aPit box §f%name%§a updated, allowed for: §3%players%"
   setColor:
-    updated: "§aPit box §f#%id%§a color set to §f%color%"
+    updated: "§aPit box §f%name%§a color set to §f%color%"
     invalid: "§cInvalid color. Choices: §f%availableColors%"
   help: "§3--------- §b§l/pitbox§r §3---------
   \n§3->§a create <raceName> §8-§7 Create a pit box

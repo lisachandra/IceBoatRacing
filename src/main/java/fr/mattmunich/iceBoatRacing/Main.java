@@ -71,11 +71,21 @@ public final class Main extends JavaPlugin {
 
     private void loadPacketEvents() {
         if (Bukkit.getPluginManager().getPlugin("packetevents") != null) {
-            BoatCollisionSuppressor.register(raceManager);
+            BoatCollisionSuppressor.register(this, raceManager);
             log("PacketEvents detected — boat collision fix enabled.");
         } else {
             warn("PacketEvents not found — boat collision fix won't work!");
         }
+    }
+
+    public RaceManager getRaceManager() {
+        return raceManager;
+    }
+
+    public RaceManager resetRaceManager() {
+        raceManager = null;
+        raceManager = new RaceManager(this, carManager, checkpointManager, pitBoxManager, liveScoreManager);
+        return raceManager;
     }
 
     private void registerListeners() {
@@ -182,7 +192,7 @@ public final class Main extends JavaPlugin {
         liveScoreManager = new LiveScoreManager();
     }
 
-    public void log(String message) {
+    public static void log(String message) {
         Bukkit.getConsoleSender().sendMessage("[IceBoatRacing] " + message);
     }
 

@@ -198,6 +198,13 @@ public class Race {
         return null;
     }
 
+    public @Nullable PitBox getPitBox(String name) {
+        for (PitBox box : pitBoxes) {
+            if (box.getName().equalsIgnoreCase(name)) return box;
+        }
+        return null;
+    }
+
     public void addPitBox(PitBox box) {
         pitBoxes.add(box);
     }

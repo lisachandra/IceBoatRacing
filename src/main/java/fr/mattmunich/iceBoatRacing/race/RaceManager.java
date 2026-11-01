@@ -89,7 +89,7 @@ public class RaceManager {
      * Loads and initializes all the races from file
      */
     public void loadAllRaces() {
-        main.log("Loading all races...");
+        log("Loading all races...");
         int loadedRaces = 0;
 
         if(!races.isEmpty()) {
@@ -112,7 +112,7 @@ public class RaceManager {
                 continue;
             }
 
-            main.log("Loading race " + name);
+            log("Loading race " + name);
             String worldName = Objects.requireNonNull(config.getString("world"));
             World world = Bukkit.getWorld(worldName);
             if(world == null) {
@@ -168,17 +168,17 @@ public class RaceManager {
             }
 
             races.add(race);
-            main.log("Race " + name + " has been loaded");
+            log("Race " + name + " has been loaded");
             loadedRaces++;
         }
-        main.log("Loaded " + loadedRaces + " race(s)!");
+        log("Loaded " + loadedRaces + " race(s)!");
     }
 
     /**
      * Loads and initializes all the races from file
      */
     public boolean loadRace(String raceName) {
-        main.log("Loading race " + raceName + "...");
+        log("Loading race " + raceName + "...");
 
         File racesFolder = new File(main.getDataFolder(), "races");
         if (!racesFolder.exists()) {
@@ -255,7 +255,7 @@ public class RaceManager {
 
         races.add(race);
 
-        main.log("Loaded race " + raceName + " successfully!");
+        log("Loaded race " + raceName + " successfully!");
         return true;
     }
 
@@ -263,18 +263,18 @@ public class RaceManager {
      * Updates all the races from file. (Called on reload)
      */
     public void updateAllRaces() {
-        main.log("Updating all races...");
+        log("Updating all races...");
         int loadedRaces = 0;
 
         if(!races.isEmpty()) {
             for (Race race : new ArrayList<>(races)) {
                 boolean success = race.update();
-                if(success) main.log("Race " + race.getName() + " has been updated");
+                if(success) log("Race " + race.getName() + " has been updated");
                 else warn("Could not update race " + race.getName() + ", see error above.");
                 loadedRaces++;
                 try { race.end(false); } catch (Exception ignored) {}
             }
-            main.log("Updated " + loadedRaces + " race(s)!");
+            log("Updated " + loadedRaces + " race(s)!");
         } else {
             warn("No races updated (none were found).");
         }
@@ -290,7 +290,7 @@ public class RaceManager {
      */
     @SuppressWarnings("UnusedReturnValue")
     public Race createRace(Race race) {
-        main.log("Creating race " + race.getName());
+        log("Creating race " + race.getName());
         File raceFile = new File(main.getDataFolder(), "races/" + race.getName().replace(" ","_") + ".yml");
         raceFile.getParentFile().mkdirs();
 
@@ -305,7 +305,7 @@ public class RaceManager {
 
         try {
             config.save(raceFile);
-            main.log("Race " + race.getName() + " has been saved");
+            log("Race " + race.getName() + " has been saved");
         } catch (IOException e) {
             err("Couldn't create race " + race.getName(),e);
             return null;
@@ -411,7 +411,7 @@ public class RaceManager {
      * @return Whether the operation succeeded
      */
     public boolean deleteRace(Race race) {
-        main.log("Deleting race " + race.getName());
+        log("Deleting race " + race.getName());
         try { race.end(false); } catch (Exception ignored) {}
 
         File raceFile = new File(main.getDataFolder(), "races/" + race.getName().replace(" ","_") + ".yml");
@@ -419,7 +419,7 @@ public class RaceManager {
 
         races.remove(race);
 
-        if(deleted) main.log("Race " + race.getName() + " has been deleted");
+        if(deleted) log("Race " + race.getName() + " has been deleted");
         return deleted;
     }
 
@@ -432,14 +432,14 @@ public class RaceManager {
         File racesFolder = new File(main.getDataFolder(), "races");
 
         if (!racesFolder.exists()) {
-            main.log("§cCouldn't get config for race " + race.getName() + " because the race folder didn't exist.");
+            log("§cCouldn't get config for race " + race.getName() + " because the race folder didn't exist.");
             return null;
         }
 
         File file = new File(racesFolder, race.getName().replace(" ","_") + ".yml");
         YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
         if (!file.exists()) {
-            main.log("§cCouldn't get config for race " + race.getName() + " because the race config file didn't exist.");
+            log("§cCouldn't get config for race " + race.getName() + " because the race config file didn't exist.");
             return null;
         }
 
@@ -456,7 +456,7 @@ public class RaceManager {
         File racesFolder = new File(main.getDataFolder(), "races");
 
         if (!racesFolder.exists()) {
-            main.log("§cCouldn't get config for race " + race.getName() + " because the race folder didn't exist.");
+            log("§cCouldn't get config for race " + race.getName() + " because the race folder didn't exist.");
             return;
         }
 
@@ -497,7 +497,7 @@ public class RaceManager {
     public Result startRace(Race race) {
         YamlConfiguration config = getRaceConfig(race);
         if(config == null) {
-            main.log("§cCouldn't start race " + race.getName() + " because the race config file didn't exist.");
+            log("§cCouldn't start race " + race.getName() + " because the race config file didn't exist.");
             return Result.ERROR;
         }
 

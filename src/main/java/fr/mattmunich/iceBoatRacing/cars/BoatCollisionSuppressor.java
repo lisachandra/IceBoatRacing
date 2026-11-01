@@ -5,10 +5,13 @@ import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.github.retrooper.packetevents.event.PacketListenerAbstract;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerVehicleMove;
+import fr.mattmunich.iceBoatRacing.Main;
 import org.bukkit.entity.Player;
 
 import fr.mattmunich.iceBoatRacing.race.Racer;
 import fr.mattmunich.iceBoatRacing.race.RaceManager;
+
+import static fr.mattmunich.iceBoatRacing.Main.*;
 
 /**
  * Suppresses corrective VehicleMove packets sent to racing players.
@@ -23,15 +26,18 @@ import fr.mattmunich.iceBoatRacing.race.RaceManager;
  */
 public class BoatCollisionSuppressor extends PacketListenerAbstract {
 
-    private final RaceManager raceManager;
 
-    public BoatCollisionSuppressor(RaceManager raceManager) {
+    private final Main main;
+    private RaceManager raceManager;
+
+    public BoatCollisionSuppressor(Main main, RaceManager raceManager) {
+        this.main = main;
         this.raceManager = raceManager;
     }
 
-    public static void register(RaceManager raceManager) {
+    public static void register(Main main, RaceManager raceManager) {
         PacketEvents.getAPI().getEventManager()
-                .registerListener(new BoatCollisionSuppressor(raceManager));
+                .registerListener(new BoatCollisionSuppressor(main, raceManager));
     }
 
     @Override
@@ -43,6 +49,22 @@ public class BoatCollisionSuppressor extends PacketListenerAbstract {
         Object playerObj = event.getPlayer();
         if (!(playerObj instanceof Player player)) {
             return;
+        }
+
+        if (raceManager == null) {
+            warn("RaceManager is null, trying to define it again...");
+            this.raceManager = main.getRaceManager();
+            if (raceManager == null) {
+                warn("RaceManager is still null, trying harder...");
+                raceManager = main.resetRaceManager();
+                if (raceManager == null) {
+                    severe("Could not reset race manager! Try restarting the server.");
+                } else {
+                    log("Success!");
+                }
+            } else {
+                log("Success!");
+            }
         }
 
         Racer racer = raceManager.getRacer(player.getUniqueId());
