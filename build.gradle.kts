@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "fr.mattmunich"
-version = "2.4-RELEASE"
+version = "2.4-RELEASE-1.21.3"
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(21))
@@ -16,7 +16,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:1.21.3-R0.1-SNAPSHOT")
     compileOnly("com.github.retrooper:packetevents-spigot:2.13.0")
 }
 

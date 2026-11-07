@@ -25,6 +25,25 @@ public class CarManager {
 
     public CarManager() {}
 
+    /**
+     * Set the yaw (and pitch) of a location. Replacement for
+     * Location#setRotation(float,float) which only exists in Paper 1.21.4+.
+     */
+    private static Location setRotation(Location location, float yaw, float pitch) {
+        location.setYaw(yaw);
+        location.setPitch(pitch);
+        return location;
+    }
+
+    /**
+     * Get the custom name of an item meta as plain text. Replacement for
+     * ItemMeta#customName() which only exists in Paper 1.21.4+.
+     */
+    private static String itemCustomName(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return "";
+        return s(item.getItemMeta().displayName());
+    }
+
     public void setRaceManager(RaceManager raceManager) {
         this.raceManager = raceManager;
     }
@@ -88,7 +107,7 @@ public class CarManager {
 
         Location boatLocation = boat.getLocation();
 
-        boatLocation.setRotation(race.getStartRotation(),0F);
+        setRotation(boatLocation, race.getStartRotation(),0F);
         boat.teleport(boatLocation);
 
         boat.setInvulnerable(true);
@@ -120,7 +139,7 @@ public class CarManager {
         float startRotation = car.getStartingLocation() == spawnLocation
                             ? race.getStartRotation()
                             : spawnLocation.getYaw();
-        boatLocation.setRotation(startRotation,0F);
+        setRotation(boatLocation, startRotation,0F);
         boat.teleport(boatLocation);
 
         boat.setInvulnerable(true);
@@ -133,7 +152,7 @@ public class CarManager {
 
         int id = count(race);
         String path = "cars." + id;
-        String customName = s(boatItem.getItemMeta().customName()).isEmpty() ? "Race car" : s(boatItem.getItemMeta().customName());
+        String customName = itemCustomName(boatItem).isEmpty() ? "Race car" : itemCustomName(boatItem);
 
         YamlConfiguration config = race.getConfig();
 
@@ -149,7 +168,7 @@ public class CarManager {
             err("Couldn't save car " + id + " for race " + race.getName() + " because the it's config threw an error on saving. ",e);
         }
 
-        race.addCar(new Car(id, owner, startingLocation, boatItem.getType(), s(boatItem.getItemMeta().customName())));
+        race.addCar(new Car(id, owner, startingLocation, boatItem.getType(), itemCustomName(boatItem)));
     }
 
     public void loadCars(Race race) {
