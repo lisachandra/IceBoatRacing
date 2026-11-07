@@ -10,12 +10,14 @@ import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitTask;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.*;
 
 import static fr.mattmunich.iceBoatRacing.Main.formatTime;
+import static fr.mattmunich.iceBoatRacing.Main.INTERMISSION_SECONDS;
 import static fr.mattmunich.iceBoatRacing.Messages.formatArguments;
 import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
 
@@ -43,6 +45,20 @@ public class Race {
     boolean startingRace = false;
     boolean preparingRace = false;
     boolean hasRaceStarted = false;
+
+    /**
+     * Number of players who joined this race's intermission. Kept separately from
+     * {@code racers.size()} because racers are removed as they finish, and the results
+     * header should still report the original field size.
+     */
+    int participantCount = 0;
+
+    /**
+     * When the registration intermission closes (epoch millis), and the repeating task that
+     * drives its countdown/reminders. Only meaningful while {@code preparingRace} is true.
+     */
+    long intermissionEndsAt = 0;
+    BukkitTask intermissionTask = null;
     /**
      * List of the racers who hae finished the race.
      * rankings.get(0) is first, rankings.get(1) is second and so on
@@ -114,16 +130,27 @@ public class Race {
     }
 
     public void togglePrepare(CommandSender sender) {
-        raceManager.togglePrepareRace(sender, this);
+        raceManager.openRegistration(sender, this, INTERMISSION_SECONDS);
     }
     public boolean isNotStarting() {
         return !startingRace;
+    }
+    public boolean isStarting() {
+        return startingRace;
     }
     public boolean isPreparing() {
         return preparingRace;
     }
     public boolean hasStarted() {
         return hasRaceStarted;
+    }
+
+    /**
+     * Opens the registration intermission for this race. Players opt in with /race join;
+     * nobody is pulled in automatically.
+     */
+    public void openRegistration(CommandSender sender, int seconds) {
+        raceManager.openRegistration(sender, this, seconds);
     }
 
     //Basic values' getters

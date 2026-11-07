@@ -43,11 +43,19 @@ pos:
 checkpoint:
   #Usage / success messages
   create:
-    usage: "§cUsage: /checkpoint create [sector|finish] <raceName>"
+    usage: "§cUsage: /checkpoint create [sector|finish] <raceName> [id]"
+  override:
+    usage: "§cUsage: /checkpoint override [sector|finish] <raceName> <id>"
   startLineSaved: "§aStart line saved!\n§8ℹ Run /checkpoint create finish <raceName> if your finish line differs from the start line"
   finishLineSaved: "§aFinish line saved!"
   saved: "§aCheckpoint §2%id%§a saved"
+  inserted: "§aCheckpoint §2%id%§a inserted, the following checkpoints were shifted up"
+  overridden: "§aCheckpoint §2%id%§a was replaced"
+  renumbered: "§aRenumbered §2%count%§a checkpoints of race §3%race%§a into a contiguous range"
   sectorSaved: "§aSector §e%sectorID% §asaved!"
+  idOutOfRange: "§cID must be between §4%min%§c and §4%max%§c."
+  startFinishRequired: "§cCheckpoint §41§c must be the start/finish line.\n§8ℹ Use §f/checkpoint create finish <raceName> 1 §8or pick another ID."
+  raceBusy: "§cCan't change checkpoint IDs for race §4%race%§c while it is preparing, starting or running."
   removed: "§aCheckpoint §6%id%§a removed"
   count: "§aThere are %count% checkpoints"
   resetPlayerScore: "§a%player%'s§a score has been reset"
@@ -160,6 +168,31 @@ race:
   cancelPrepare: "§aPreparation mode disabled." #Displayed when '/race prepare' is used (and prepare toggled ON)
   deleted: "§aRace %race% has been deleted."#Displayed when '/race delete' is used and is successful
 
+  #Registration intermission: players opt in instead of everyone being teleported
+  intermission:
+    announce: "§b§l🏁 Race %race% §r§7— §f%laps% laps\n§7Registration closes in §f%seconds%s§7. Click below to take part.\n§7Effects and your gamemode are untouched."
+    joinButton: "§a§l[ Join race ]"
+    joinButtonHover: "§7Click to join. Requires a registered car."
+    countdown: "§b%race%§7 — §f%seconds%s§7 left to join §8(%count% joined)"
+    opened: "§aRegistration open for race §f%race%§a for §f%seconds%s§a."
+    cancelled: "§7Registration for race §f%race%§7 closed. Nobody was moved."
+    closed: "§7Registration for race §f%race%§7 closed."
+    closedAwaitingStart: "§7Registration for race §f%race%§7 closed. §f%count%§7 racer(s) registered — an admin can start it now."
+    cannotStartEmpty: "§cRace §4%race%§c can't start: nobody joined it.\n§8ℹ Run §f/race prepare %race%§8 to open registration."
+    closedNoRacers: "§cRace §4%race%§c didn't start: only §4%min%§c racer(s) required but nobody joined."
+    alreadyRunning: "§cRace §4%race%§c is already starting or running."
+    notOpen: "§cRegistration for race §4%race%§c is not open right now."
+    joined: "§aYou joined §f%race%§a! §7(%count% joined)\n§8ℹ You'll be put into your boat when the race starts. Nothing changes until then."
+    alreadyJoined: "§eYou already joined race §f%race%§e."
+    alreadyInOther: "§cYou are already registered in race §4%race%§c."
+    noCar: "§cYou don't have a car registered for race §4%race%§c.\n§8ℹ Ask an admin to run §f/car create§8 to set one up for you."
+    left: "§7You left race §f%race%§7."
+    notJoined: "§cYou are not registered in race §4%race%§c."
+    notJoinedAny: "§cYou are not registered in any race."
+    noneOpen: "§cNo race has registration open right now."
+    specifyRace: "§cSeveral races match, please specify one: §f/race join <raceName>"
+    rejoined: "§aWelcome back! You are still registered for race §f%race%§a.§7\n§8ℹ You'll be placed in your boat when it starts."
+
   #Lap count
   currentLapCount: "§bThe lap count for race %race% is set to §3%lapCount%§b. \n§8ℹ Use /race setLapCount <name> <number>"
   updatedLapCount: "§bThe lap count for race §3%race%§b has been set to §3%lapCount%§b."
@@ -183,9 +216,11 @@ race:
 
   #Help message
   help: "§3--------- §b§l/race§r §3---------
+  \n§3->§a prepare [name] [seconds] §8-§7 Open/close race registration
+  \n§7§oℹ Announces a clickable Join button in chat
+  \n§3->§a join [name] §8-§7 Join an open race
+  \n§3->§a leave [name] §8-§7 Leave the race you joined
   \n§3->§a start [name] §8-§7 Start the race
-  \n§3->§a prepare [name] §8-§7 Prepare the players
-  \n§7§oℹ Automatically places players in their cars
   \n§3->§a end [name] §8-§7 End the race
   \n§3->§a delete [name] §8-§7 Delete the race
   \n§3->§a setLapCount [name] <number> §8-§7 Set the lap count
@@ -418,4 +453,5 @@ error:
   playerNotFound: "§cPlayer not found"
   playerNeverJoined: "§cThe player §4%name%§c has never joined this server and therefore cannot be found."
   playerToExecuteCommand: "§cYou must be a player to do this."
+  noPermission: "§cYou don't have permission to do this."
   unknown: "§cAn unknown error occurred. Check the console for an error message."

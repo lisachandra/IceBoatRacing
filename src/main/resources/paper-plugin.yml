@@ -30,10 +30,14 @@ permissions:
       iceboatracing.command.checkpoint: true
       iceboatracing.command.car: true
       iceboatracing.command.race: true
+      iceboatracing.command.race.join: true
       iceboatracing.command.plugin: true
   iceboatracing.command.race:
     description: The permission for the /race command
     default: op
+  iceboatracing.command.race.join:
+    description: Allows joining and leaving a race with /race join and /race leave
+    default: true
   iceboatracing.command.car:
     description: The permission for the /car command
     default: op

@@ -25,6 +25,7 @@ import java.util.*;
 
 import static fr.mattmunich.iceBoatRacing.Main.*;
 import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
+import static fr.mattmunich.iceBoatRacing.Messages.getStringMessage;
 
 @SuppressWarnings("ResultOfMethodCallIgnored")
 public class RaceManager {
@@ -491,7 +492,11 @@ public class RaceManager {
     //Race start/end/...
 
     /**
-     * Starts the inputted {@code race}.
+     * Starts the inputted {@code race}, putting every joined racer into their boat.
+     * <p>
+     * Only players who opted in through the intermission ({@link #joinRace(Player, Race)}) are
+     * touched. Nobody is teleported, gamemode-switched or otherwise pulled into the race for
+     * simply owning a car — that consent step is the whole point of the intermission.
      * @param race The race to start
      */
     public Result startRace(Race race) {
@@ -501,20 +506,40 @@ public class RaceManager {
             return Result.ERROR;
         }
 
+        if (race.startingRace || race.hasStarted()) {
+            log("§cCouldn't start race " + race.getName() + " because it is already starting or running.");
+            return Result.ERROR;
+        }
+
+        if (race.racers.isEmpty()) {
+            log("§cCouldn't start race " + race.getName() + " because nobody joined it.");
+            return Result.WARN;
+        }
+
+        closeRegistration(race);
         race.startingRace = true;
-        activeRaces.add(race);
-        if(!race.preparingRace) {
-            for (Car car : race.getCars()) {
-                try {
-                    Result r = prepareRacer(race, car);
-                    if (r == Result.ERROR) return Result.ERROR;
-                } catch (Exception e) {
-                    err("Couldn't prepare racer", e);
-                    return Result.ERROR;
-                }
+        race.participantCount = race.racers.size();
+        if (!activeRaces.contains(race)) activeRaces.add(race);
+
+        for (Racer racer : new ArrayList<>(race.racers.values())) {
+            Player player = racer.player;
+            if (player == null || !player.isOnline()) continue;
+            if (racer.car == null) {
+                warn("Couldn't start racer " + player.getName() + " for race " + race.getName() + ": no car assigned.");
+                continue;
             }
-        } else {
-            race.preparingRace = false;
+
+            carManager.spawnCar(race, racer.car, player);
+
+            racer.racing = true;
+            racer.checkpointIndex = -1;
+            racer.lapCount = 0;
+            racer.lapTime = 0;
+            racer.startTime = 0;
+            racer.race = race;
+
+            if (!race.racing.contains(racer)) race.racing.add(racer);
+            liveScoreManager.addRacer(racer);
         }
 
         final int[] timesRun = {0};
@@ -579,81 +604,254 @@ public class RaceManager {
     }
 
     /**
-     * Prepares a racer for the inputted {@code race}
-     * @param race The race to prepare the racer for
-     * @param car The racer's car
+     * Opens the registration intermission for {@code race}: broadcasts a join announcement with a
+     * clickable button and starts the countdown. Nobody is teleported or gamemode-switched — only
+     * players who run {@code /race join} (or click the button) are added.
+     *
+     * @param sender who gets the admin feedback
+     * @param race the race to open
+     * @param seconds how long registration stays open
      */
-    public Result prepareRacer(Race race, Car car) throws NullPointerException, IllegalArgumentException {
-        Map<UUID, Racer> racers = race.racers;
-        Player owner = Bukkit.getPlayer(car.getOwner());
-        if (owner == null) return Result.NULL_POINTER;
-        Racer racer = new Racer(owner);
+    public void openRegistration(CommandSender sender, Race race, int seconds) {
+        if (race.isPreparing()) {
+            closeRegistration(race);
+            sender.sendMessage(getMessage("race.intermission.cancelled", Messages.formatArguments("race", race.getName())));
+            return;
+        }
 
-        owner.setGameMode(GameMode.ADVENTURE);
-        carManager.spawnCar(race, car, owner);
+        if (race.hasStarted() || race.isStarting()) {
+            sender.sendMessage(getMessage("race.intermission.alreadyRunning", Messages.formatArguments("race", race.getName())));
+            return;
+        }
 
-        racer.racing = true;
+        //Clear leftovers from a previous session: any boat still out there, sidebar rows, and
+        //stale racer objects with their finished flags.
+        for (Racer racer : new ArrayList<>(race.racers.values())) {
+            if (racer.car != null) racer.car.destroy();
+            racer.racing = false;
+            racer.finished = false;
+            liveScoreManager.removeRacer(racer);
+        }
+        race.racers.clear();
+        race.racing.clear();
+        race.rankings.clear();
+        race.currentBestLapTime = Long.MAX_VALUE;
+        race.participantCount = 0;
+        race.preparingRace = true;
+        if (!activeRaces.contains(race)) activeRaces.add(race);
+        race.intermissionEndsAt = System.currentTimeMillis() + (seconds * 1000L);
+        sender.sendMessage(getMessage("race.intermission.opened", Messages.formatArguments(
+                "race", race.getName(),
+                "seconds", "" + seconds
+        )));
+
+        broadcastJoinAnnouncement(race, seconds);
+        scheduleIntermission(race, seconds);
+    }
+
+    private void scheduleIntermission(Race race, int seconds) {
+        if (race.intermissionTask != null) race.intermissionTask.cancel();
+
+        List<Integer> reminders = new ArrayList<>(INTERMISSION_REMINDERS);
+        final int[] elapsed = {0};
+
+        race.intermissionTask = Bukkit.getScheduler().runTaskTimer(main, () -> {
+            if (!race.preparingRace) {
+                race.intermissionTask = null;
+                return;
+            }
+
+            elapsed[0]++;
+            int remaining = seconds - elapsed[0];
+
+            if (reminders.contains(remaining)) {
+                Bukkit.broadcast(getMessage("race.intermission.countdown", Messages.formatArguments(
+                        "race", race.getName(),
+                        "seconds", "" + remaining,
+                        "count", "" + race.racers.size()
+                )).append(c(" ")).append(joinButton(race)));
+            }
+
+            if (remaining > 0) return;
+
+            if (race.intermissionTask != null) {
+                race.intermissionTask.cancel();
+                race.intermissionTask = null;
+            }
+
+            if (race.racers.size() < INTERMISSION_MIN_RACERS) {
+                Bukkit.broadcast(getMessage("race.intermission.closedNoRacers", Messages.formatArguments(
+                        "race", race.getName(),
+                        "min", "" + INTERMISSION_MIN_RACERS
+                )));
+                closeRegistration(race);
+                race.racers.clear();
+                activeRaces.remove(race);
+                return;
+            }
+
+            if (INTERMISSION_AUTO_START) {
+                startRace(race);
+            } else {
+                //Keep the roster: the admin still has to run /race start by hand.
+                Bukkit.broadcast(getMessage("race.intermission.closedAwaitingStart", Messages.formatArguments(
+                        "race", race.getName(),
+                        "count", "" + race.racers.size()
+                )));
+                closeRegistration(race);
+            }
+        }, 20L, 20L);
+    }
+
+    private void broadcastJoinAnnouncement(Race race, int seconds) {
+        Bukkit.broadcast(getMessage("race.intermission.announce", Messages.formatArguments(
+                "race", race.getName(),
+                "seconds", "" + seconds,
+                "laps", "" + race.getLapCount()
+        ), Messages.formatComponentArguments(
+                "join", joinButton(race)
+        )));
+    }
+
+    /** The clickable [Join] component, reused by the announcement and the countdown reminders. */
+    private net.kyori.adventure.text.Component joinButton(Race race) {
+        return c(getStringMessage("race.intermission.joinButton"))
+                .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/race join " + race.getName()))
+                .hoverEvent(net.kyori.adventure.text.event.HoverEvent.showText(
+                        c(getStringMessage("race.intermission.joinButtonHover"))
+                ));
+    }
+
+    /**
+     * Stops the intermission countdown without touching any player.
+     * Does not remove the race from {@code activeRaces}: the caller decides whether the race is
+     * about to start (keep it active) or is being abandoned (caller removes it).
+     */
+    public void closeRegistration(Race race) {
+        race.preparingRace = false;
+        if (race.intermissionTask != null) {
+            race.intermissionTask.cancel();
+            race.intermissionTask = null;
+        }
+        race.intermissionEndsAt = 0;
+    }
+
+    /**
+     * Adds {@code player} to {@code race}'s roster during the intermission.
+     * <p>
+     * This is the only way into a race. The player must own a registered car for the race, since
+     * the car supplies both the boat and the starting position. Nothing is moved or changed yet:
+     * they stay wherever they are until the race actually starts.
+     *
+     * @return true if the player is now registered
+     */
+    public Result joinRace(Player player, Race race) {
+        if (!race.isPreparing()) {
+            player.sendMessage(getMessage("race.intermission.notOpen", Messages.formatArguments("race", race.getName())));
+            return Result.ERROR;
+        }
+
+        if (race.racers.containsKey(player.getUniqueId())) {
+            player.sendMessage(getMessage("race.intermission.alreadyJoined", Messages.formatArguments("race", race.getName())));
+            return Result.WARN;
+        }
+
+        Racer other = getRacer(player.getUniqueId());
+        if (other != null && other.race != null && other.race != race) {
+            player.sendMessage(getMessage("race.intermission.alreadyInOther", Messages.formatArguments(
+                    "race", other.race.getName()
+            )));
+            return Result.ERROR;
+        }
+
+        Car car = getCarFor(race, player.getUniqueId());
+        if (car == null) {
+            player.sendMessage(getMessage("race.intermission.noCar", Messages.formatArguments("race", race.getName())));
+            return Result.ERROR;
+        }
+
+        Racer racer = new Racer(player);
+        racer.player = player;
         racer.car = car;
+        racer.race = race;
+        racer.racing = false;
         racer.checkpointIndex = -1;
         racer.lapCount = 0;
-        racer.lapTime = 0;
-        racer.startTime = 0;
-        racer.race = race;
-        racer.player = owner;
+        racer.returnLocation = player.getLocation().clone();
 
-        liveScoreManager.removeRacer(owner);
-        liveScoreManager.addRacer(racer);
-        race.racing.add(racer);
-        racers.put(owner.getUniqueId(), racer);
+        race.racers.put(player.getUniqueId(), racer);
+
+        player.sendMessage(getMessage("race.intermission.joined", Messages.formatArguments(
+                "race", race.getName(),
+                "count", "" + race.racers.size()
+        )));
         return Result.SUCCESS;
     }
 
     /**
-     * Toggles the preparation mode for the {@code race}
-     * @param sender Who the feedback will be sent to
-     * @param race The race to toggle the preparation for
+     * Removes {@code player} from {@code race}. If the race is already running this also puts
+     * their car away and returns them to where they joined from.
      */
-    public void togglePrepareRace(CommandSender sender, Race race) {
-        if(race.preparingRace) cancelPrepareRace(sender, race);
-        else prepareRace(sender, race);
-    }
+    public Result leaveRace(Player player, Race race) {
+        Racer racer = race.racers.get(player.getUniqueId());
+        if (racer == null) {
+            player.sendMessage(getMessage("race.intermission.notJoined", Messages.formatArguments("race", race.getName())));
+            return Result.ERROR;
+        }
 
-    public void prepareRace(CommandSender sender, Race race) {
-        sender.sendMessage(getMessage("race.prepare", Messages.formatArguments("name", race.getName())));
-        race.preparingRace = true;
-        activeRaces.add(race);
-        for (Car car : race.getCars()) {
-            Player owner = Bukkit.getPlayer(car.getOwner());
-            if (owner == null) continue;
+        race.racers.remove(player.getUniqueId());
+        race.racing.remove(racer);
+        liveScoreManager.removeRacer(racer);
+        if (racer.pittingBox != null) pitBoxManager.cancelSession(player, racer.pittingBox);
 
+        //destroy() removes the boat entity and clears Car.boat, so this is safe to call whether
+        //or not the racer was already placed in it
+        if (racer.car != null) racer.car.destroy();
+        if (player.getVehicle() != null) player.getVehicle().remove();
+
+        racer.racing = false;
+        teleportBack(player, racer);
+
+        player.sendMessage(getMessage("race.intermission.left", Messages.formatArguments("race", race.getName())));
+
+        //Last racer out during a run ends it, mirroring the quit handling
+        if (race.hasStarted() && race.racing.isEmpty()) {
             try {
-                Result r = prepareRacer(race, car);
-                if(r == Result.ERROR) sender.sendMessage(getMessage("error.unknown"));
-            } catch (Exception e) {
-                err("Couldn't prepare racer", e);
-                sender.sendMessage(getMessage("error.unknown"));
-                return;
+                race.end(true);
+            } catch (Exception ignored) {
+                //Ranking messages are best-effort; the race is torn down either way
             }
         }
+        return Result.SUCCESS;
     }
 
-    public void cancelPrepareRace(CommandSender sender, Race race) {
-        sender.sendMessage(getMessage("race.cancelPrepare", Messages.formatArguments("name", race.getName())));
-        race.preparingRace = false;
-        activeRaces.remove(race);
+    /** Finds the car of {@code owner} in {@code race}, or null if they have none registered. */
+    public Car getCarFor(Race race, UUID owner) {
         for (Car car : race.getCars()) {
-            Player owner = Bukkit.getPlayer(car.getOwner());
-            if (owner == null) continue;
-            try {
-                car.getBoat().remove();
-            } catch (Exception ignored) { continue; }
-            owner.teleport(race.getWorld().getSpawnLocation());
-            race.racers.remove(owner.getUniqueId());
+            if (car.getOwner().equals(owner)) return car;
         }
+        return null;
+    }
+
+    /** Sends a player back to where they joined the race; world spawn as a fallback. */
+    public void teleportBack(Player player, Racer racer) {
+        if (!TELEPORT_BACK_AFTER_RACE) return;
+
+        Location target = racer.returnLocation;
+        if (target == null || target.getWorld() == null) {
+            target = racer.race != null ? racer.race.getWorld().getSpawnLocation() : null;
+        }
+        if (target == null) return;
+
+        player.teleport(target);
     }
 
     /**
-     * Ends the inputted {@code race}
+     * Ends the inputted {@code race}.
+     * <p>
+     * Only joined racers are cleaned up. Players who own a car for this race but never joined are
+     * left completely alone — no gamemode change, no teleport. Nobody's gamemode is touched at all:
+     * racers keep whatever mode they were already in on this survival server.
      * @param race The race to end
      */
     public void endRace(Race race) {
@@ -670,22 +868,23 @@ public class RaceManager {
         race.hasRaceStarted = false;
 
         Bukkit.broadcast(getMessage("race.end", Messages.formatArguments("name", race.getName())));
-        for (Car car : race.getCars()) {
-            Player owner = Bukkit.getPlayer(car.getOwner());
-            if (owner == null) continue;
-            if (SPECTATE_ON_FINISH) owner.setGameMode(GameMode.SPECTATOR);
-            Racer data = race.racers.get(owner.getUniqueId());
-            if (data != null && data.pittingBox != null) pitBoxManager.cancelSession(owner, data.pittingBox);
 
-            car.destroy();
-            race.racers.remove(owner.getUniqueId());
+        for (Racer racer : new ArrayList<>(race.racers.values())) {
+            Player owner = racer.player;
+            if (owner != null && racer.pittingBox != null) pitBoxManager.cancelSession(owner, racer.pittingBox);
+
+            if (racer.car != null) racer.car.destroy();
+            racer.racing = false;
+
+            if (owner != null && owner.isOnline()) {
+                if (owner.getVehicle() != null) owner.getVehicle().remove();
+                liveScoreManager.removeRacer(racer);
+                teleportBack(owner, racer);
+            }
         }
+        race.racers.clear();
 
         liveScoreManager.empty();
-        if(!race.racers.isEmpty()) {
-            race.racing.clear();
-        }
-
         race.hasRaceStarted=false;
     }
 

@@ -10,12 +10,13 @@ import fr.mattmunich.iceBoatRacing.pitbox.PitBoxManager;
 import fr.mattmunich.iceBoatRacing.race.*;
 import fr.mattmunich.iceBoatRacing.checkpoint.CheckpointCommand;
 import fr.mattmunich.iceBoatRacing.checkpoint.CheckpointManager;
+import io.papermc.paper.command.brigadier.Commands;
+import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
@@ -39,10 +40,13 @@ public final class Main extends JavaPlugin {
 //    public Objective liveSidebar;
 
     //Config
-    public static GameMode RACING_GAMEMODE;
-    public static boolean ENFORCE_RACING_GAMEMODE;
-    public static boolean SPECTATE_ON_FINISH;
     public static boolean REMOVE_CAR_ON_LOGOUT;
+    public static boolean ALLOW_REJOIN;
+    public static boolean TELEPORT_BACK_AFTER_RACE;
+    public static int INTERMISSION_SECONDS;
+    public static boolean INTERMISSION_AUTO_START;
+    public static int INTERMISSION_MIN_RACERS;
+    public static final List<Integer> INTERMISSION_REMINDERS = new ArrayList<>();
 
     @Override
     public void onEnable() {
@@ -101,22 +105,25 @@ public final class Main extends JavaPlugin {
     }
 
     public void updateConstants() {
-        //Racing game mode
-        try {
-            RACING_GAMEMODE = GameMode.valueOf(getConfig().getString("race.racingGameMode"));
-        } catch (IllegalArgumentException e) {
-            warn("Could not parse racingGameMode from config file, set to default ADVENTURE");
-            RACING_GAMEMODE = GameMode.ADVENTURE;
-        }
-
-        //Enforce racing game mode
-        ENFORCE_RACING_GAMEMODE = getConfig().getBoolean("race.enforceRacingGameMode");
-
-        //Spectate on finish
-        SPECTATE_ON_FINISH = getConfig().getBoolean("race.spectateOnFinish");
+        //Allow a racer to rejoin after logging out mid-race
+        ALLOW_REJOIN = getConfig().getBoolean("race.allowRejoin", true);
 
         //Remove car on logout
         REMOVE_CAR_ON_LOGOUT = getConfig().getBoolean("race.removeCarWhenLoggingOut");
+
+        //Return players to where they joined once they leave or finish a race
+        TELEPORT_BACK_AFTER_RACE = getConfig().getBoolean("race.teleportBackAfterRace", true);
+
+        //Registration intermission
+        INTERMISSION_SECONDS = Math.max(5, getConfig().getInt("race.intermission.seconds", 120));
+        INTERMISSION_AUTO_START = getConfig().getBoolean("race.intermission.autoStart", true);
+        INTERMISSION_MIN_RACERS = Math.max(1, getConfig().getInt("race.intermission.minRacers", 1));
+
+        INTERMISSION_REMINDERS.clear();
+        for (int value : getConfig().getIntegerList("race.intermission.reminderSeconds")) {
+            if (value > 0) INTERMISSION_REMINDERS.add(value);
+        }
+        if (INTERMISSION_REMINDERS.isEmpty()) INTERMISSION_REMINDERS.addAll(List.of(60, 30, 10));
     }
 
     public void loadConfigs() {
@@ -168,11 +175,16 @@ public final class Main extends JavaPlugin {
 
     private void registerCommands() {
         log("Registering commands...");
-        registerCommand("iceboatracing", "Command to manage the plugin", List.of("ibr"), new IBRCommand(this));
-        registerCommand("race", "Command to manage the race", new RaceCommand(this, raceManager,raceCreator));
-        registerCommand("checkpoint", "Command to manage checkpoints", new CheckpointCommand(checkpointManager, raceManager, autoTraceManager, new RaceCreator(this, raceManager, carCreator), liveScoreManager));
-        registerCommand("car", "Command to manage cars", new CarCommand(carManager,raceManager,carCreator));
-        registerCommand("pitbox", "Command to manage pit boxes", new PitBoxCommand(raceManager, pitBoxManager, pitBoxCreator));
+        //Register via the lifecycle API (available since 1.20.6) instead of
+        //JavaPlugin#registerCommand (1.21.4+) so the plugin runs on Paper 1.21.3.
+        this.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
+            final Commands registrar = event.registrar();
+            registrar.register("iceboatracing", "Command to manage the plugin", List.of("ibr"), new IBRCommand(this));
+            registrar.register("race", "Command to manage the race", new RaceCommand(this, raceManager,raceCreator));
+            registrar.register("checkpoint", "Command to manage checkpoints", new CheckpointCommand(checkpointManager, raceManager, autoTraceManager, new RaceCreator(this, raceManager, carCreator), liveScoreManager));
+            registrar.register("car", "Command to manage cars", new CarCommand(carManager,raceManager,carCreator));
+            registrar.register("pitbox", "Command to manage pit boxes", new PitBoxCommand(raceManager, pitBoxManager, pitBoxCreator));
+        });
         log("Done registering commands!");
     }
 

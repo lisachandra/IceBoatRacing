@@ -52,10 +52,8 @@ public class RaceListener implements Listener {
             return;
         }
 
-        if(ENFORCE_RACING_GAMEMODE && !player.getGameMode().equals(RACING_GAMEMODE)) {
-            player.sendActionBar(Objects.requireNonNull(c("§cIllegal GameMode!")));
-            return;
-        }
+        //Finished racers stay in `race.racers` for the final ranking, but must not be processed again
+        if (!racer.racing || racer.finished) return;
 
         Race race = racer.race;
 
@@ -251,6 +249,7 @@ public class RaceListener implements Listener {
         race.racing.remove(racer);
         racer.endTime = now;
         racer.racing = false;
+        racer.finished = true;
         race.rankings.put(finished.size(), racer);
 
         int ranking = finished.size();
@@ -266,7 +265,7 @@ public class RaceListener implements Listener {
 
         Map<Integer,Long> bestSectorsTimes = racer.bestSectorsTimes();
 
-        int players = race.racers.size();
+        int players = race.participantCount > 0 ? race.participantCount : race.racers.size();
 
         Bukkit.broadcast(getMessage("race.onFinish.message",
                 formatArguments(
@@ -337,13 +336,16 @@ public class RaceListener implements Listener {
             ));
         }
 
-        if (SPECTATE_ON_FINISH) {
-            player.setGameMode(GameMode.SPECTATOR);
-            boolean success = racer.car.destroy();
-            if (!success && player.getVehicle() != null) player.getVehicle().remove();
-        } else {
-            race.racing.remove(racer);
+        //Put the finished racer back where they joined from. They stay in `race.racers` so the
+        //final ranking still reports the full field, but `racer.racing` is false so onMove()
+        //ignores them and they can't re-cross the line and be ranked twice.
+        if (racer.car != null) {
+            boolean destroyed = racer.car.destroy();
+            if (!destroyed && player.getVehicle() != null) player.getVehicle().remove();
         }
+        if (player.getVehicle() != null) player.getVehicle().remove();
+
+        raceManager.teleportBack(player, racer);
     }
 
     private void handlePitBox(Player player, Racer racer, Race race, Location to) {

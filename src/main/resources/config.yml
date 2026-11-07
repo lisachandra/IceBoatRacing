@@ -21,18 +21,25 @@ race:
   # Whether a player should be allowed to continue racing even after logging out and back in
   allowRejoin: true
 
-  # The racer's GameMode during the race
-  ## Use ADVENTURE, SURVIVAL or CREATIVE (will probably not work with SPECTATOR)
-  racingGameMode: ADVENTURE
+  # Whether to put a player back where they joined the race from
+  ## once they leave or finish it. This is not stored on disk, so after a
+  ## server restart the world spawn is used instead.
+  teleportBackAfterRace: true
 
-  # Will prevent the checkpoints for working if the racer's
-  # GameMode is not `racingGameMode`
-  enforceRacingGameMode: true
-
-  # Whether the player should be put is spectator mode when they finish the race.
-  ## - true: player will be put in spectator mode
-  ## - false: player will remain on track and be able to freely continue boating
-  spectateOnFinish: true
+  # Race registration intermission.
+  ## /race prepare broadcasts a clickable Join button, and only the players
+  ## who click it take part. Nobody is teleported or gamemode-switched until
+  ## the race actually starts.
+  intermission:
+    # How long registration stays open, in seconds
+    seconds: 120
+    # Start the race automatically when the intermission ends
+    ## If false, an admin has to run /race start manually.
+    autoStart: true
+    # Minimum number of joined players needed to start
+    minRacers: 1
+    # Times remaining (seconds) at which the join button is repeated in chat
+    reminderSeconds: [60, 30, 10]
 
   # Whether a player's car should be removed when they log out
   ## If allowRejoin is false, the car will always be removed

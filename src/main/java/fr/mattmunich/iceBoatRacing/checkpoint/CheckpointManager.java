@@ -7,6 +7,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.World;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
@@ -115,7 +116,16 @@ public class CheckpointManager {
             err("Couldn't remove checkpoint " + checkpoint.getId() + " for race " + race.getName() + " because the it's config threw an error on saving. ",e);
             return false;
         }
-        return race.removeCheckpoint(checkpoint);
+
+        race.removeCheckpoint(checkpoint);
+
+        //Removing an ID leaves a gap, and a gap makes the race impossible to finish because the
+        //next checkpoint is looked up by `index + 1`. Close it right away, unless a race is
+        //currently using these IDs (renumbering under a racer would shift the target mid-lap).
+        if (!race.isPreparing() && !race.isStarting() && !race.hasStarted()) {
+            renumber(race);
+        }
+        return true;
     }
 
     /**
@@ -126,9 +136,6 @@ public class CheckpointManager {
      * @param type The checkpoint's type (NORMAL or START_FINISH)
      */
     public Checkpoint saveCheckpoint(Race race, Location l1, Location l2, Checkpoint.Type type) {
-        Location min = min(l1, l2);
-        Location max = max(l1, l2);
-
         int ID = nextId(race);
 
         YamlConfiguration config = race.getConfig();
@@ -137,13 +144,11 @@ public class CheckpointManager {
             return null;
         }
 
-        String path = "checkpoints." + ID;
+        writeBox(config, ID, l1, l2, type);
 
-        config.set(path + ".shape", Checkpoint.Shape.BOX.name());
-        config.set(path + ".world", min.getWorld().getName());
-        config.set(path + ".min", serialize(min));
-        config.set(path + ".max", serialize(max));
-        config.set(path + ".type", type.name());
+        if (type == Checkpoint.Type.SECTOR) {
+            config.set("checkpoints." + ID + ".sectorID", nextSectorId(race));
+        }
 
         try {
             race.saveConfig();
@@ -152,9 +157,157 @@ public class CheckpointManager {
             return null;
         }
 
-        Checkpoint checkpoint = new Checkpoint(ID, min, max, type);
+        Location min = min(l1, l2);
+        Location max = max(l1, l2);
+        Checkpoint checkpoint = type == Checkpoint.Type.SECTOR
+                ? new Checkpoint(ID, config.getInt("checkpoints." + ID + ".sectorID"), min, max)
+                : new Checkpoint(ID, min, max, type);
         race.addCheckpoint(checkpoint);
         return checkpoint;
+    }
+
+    /**
+     * Saves a BOX checkpoint at a specific ID instead of appending at the end.
+     * <p>
+     * When {@code insert} is true every existing checkpoint with an ID {@code >= id} is shifted up
+     * by one, so the new checkpoint takes its place in the lap order and nothing is overwritten.
+     * When {@code insert} is false the checkpoint already at {@code id} is replaced in place
+     * (its old geometry, sector ID and alternate routes are discarded).
+     *
+     * @param race the race to attach the checkpoint to
+     * @param l1 first corner of the checkpoint (pos1)
+     * @param l2 second corner of the checkpoint (pos2)
+     * @param type the checkpoint type
+     * @param id the target ID (1-based, matching the lap order)
+     * @param insert true to shift the following IDs up, false to overwrite the target ID
+     * @return the saved checkpoint, or null on failure
+     */
+    public Checkpoint saveCheckpointAt(Race race, Location l1, Location l2, Checkpoint.Type type, int id, boolean insert) {
+        YamlConfiguration config = race.getConfig();
+        if(config == null) {
+            main.log("§cCheckpoint " + id + " for race " + race.getName() + " wasn't saved, see cause above.");
+            return null;
+        }
+
+        if (insert) {
+            shiftIdsUp(config, id);
+        } else {
+            config.set("checkpoints." + id, null);
+        }
+
+        writeBox(config, id, l1, l2, type);
+
+        //A SECTOR checkpoint also needs its own split-timing ID, continuing from the race's existing sectors
+        if (type == Checkpoint.Type.SECTOR) {
+            config.set("checkpoints." + id + ".sectorID", nextSectorId(race));
+        }
+
+        try {
+            race.saveConfig();
+        } catch (IOException e) {
+            err("Couldn't save checkpoint " + id + " for race " + race.getName() + " because the it's config threw an error on saving. ", e);
+            return null;
+        }
+
+        //Rebuild from the saved config so the in-memory list matches the new ID order
+        loadRaceCheckpoints(race);
+        return race.getCheckpoint(id);
+    }
+
+    /**
+     * Rewrites every checkpoint of {@code race} as a contiguous 1..N range, preserving the
+     * current order. Used to close the gap left behind by {@link #remove(Race, Checkpoint)},
+     * which deletes an ID without renumbering — a gap makes the race impossible to complete
+     * because {@code RaceListener} looks each next checkpoint up by {@code index + 1}.
+     *
+     * @return the number of checkpoints renumbered, or -1 on failure
+     */
+    public int renumber(Race race) {
+        YamlConfiguration config = race.getConfig();
+        if (config == null) {
+            main.log("§cCheckpoints for race " + race.getName() + " weren't renumbered, see cause above.");
+            return -1;
+        }
+
+        List<Integer> ids = new ArrayList<>();
+        for (Checkpoint checkpoint : race.getCheckpoints()) ids.add(checkpoint.getId());
+        Collections.sort(ids);
+
+        if (ids.isEmpty()) return 0;
+
+        //Grab every section up front, then clear the whole block and write it back at 1..N.
+        List<Map<String, Object>> sections = new ArrayList<>();
+        for (int id : ids) {
+            ConfigurationSection section = config.getConfigurationSection("checkpoints." + id);
+            sections.add(section == null ? null : section.getValues(true));
+        }
+
+        config.set("checkpoints", null);
+        for (int i = 0; i < sections.size(); i++) {
+            Map<String, Object> values = sections.get(i);
+            if (values == null) continue;
+            String path = "checkpoints." + (i + 1);
+            for (Map.Entry<String, Object> entry : values.entrySet()) {
+                config.set(path + "." + entry.getKey(), entry.getValue());
+            }
+        }
+
+        try {
+            race.saveConfig();
+        } catch (IOException e) {
+            err("Couldn't renumber checkpoints for race " + race.getName() + " because the it's config threw an error on saving. ", e);
+            return -1;
+        }
+
+        loadRaceCheckpoints(race);
+        return sections.size();
+    }
+
+    /**
+     * Shifts every checkpoint with an ID {@code >= from} up by one, in descending order so no
+     * entry is overwritten before it has been copied.
+     */
+    private void shiftIdsUp(YamlConfiguration config, int from) {
+        ConfigurationSection checkpoints = config.getConfigurationSection("checkpoints");
+        if (checkpoints == null) return;
+
+        List<Integer> toShift = new ArrayList<>();
+        for (String key : checkpoints.getKeys(false)) {
+            try {
+                int id = Integer.parseInt(key);
+                if (id >= from) toShift.add(id);
+            } catch (NumberFormatException ignored) {
+                //Non-numeric key, not a checkpoint ID — leave it alone
+            }
+        }
+        toShift.sort(Collections.reverseOrder());
+
+        for (int id : toShift) {
+            ConfigurationSection section = config.getConfigurationSection("checkpoints." + id);
+            if (section == null) continue;
+
+            Map<String, Object> values = section.getValues(true);
+            String path = "checkpoints." + (id + 1);
+            for (Map.Entry<String, Object> entry : values.entrySet()) {
+                config.set(path + "." + entry.getKey(), entry.getValue());
+            }
+            config.set("checkpoints." + id, null);
+        }
+    }
+
+    /**
+     * Writes a BOX checkpoint's fields under {@code checkpoints.<id>}.
+     */
+    private void writeBox(YamlConfiguration config, int id, Location l1, Location l2, Checkpoint.Type type) {
+        Location min = min(l1, l2);
+        Location max = max(l1, l2);
+        String path = "checkpoints." + id;
+
+        config.set(path + ".shape", Checkpoint.Shape.BOX.name());
+        config.set(path + ".world", min.getWorld().getName());
+        config.set(path + ".min", serialize(min));
+        config.set(path + ".max", serialize(max));
+        config.set(path + ".type", type.name());
     }
 
     public Checkpoint saveSectorCheckpoint(Race race, Location l1, Location l2) {

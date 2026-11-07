@@ -33,6 +33,20 @@ public class Racer {
     public Race race;
     public Location logoutLocation;
 
+    /**
+     * Where to put this player back when they leave or finish the race. Captured when they join
+     * the intermission, so a survival player returns to where they were instead of being
+     * stranded at the track. In memory only: after a restart we fall back to the world spawn.
+     */
+    public Location returnLocation;
+
+    /**
+     * True once this racer has crossed the finish line (or is disqualified). Finished racers stay
+     * in {@code race.racers} so the final ranking reports the whole field, but they must not be
+     * re-spawned into a boat, teleported again, or allowed to re-cross the line.
+     */
+    public boolean finished = false;
+
     public Racer(Player player) {
         this.player = player;
     }

@@ -57,6 +57,10 @@ public class CheckpointCommand implements BasicCommand {
 
         if (args.length >= 1 && args[0].equalsIgnoreCase("create")) {
             handleCreate(p, args);
+        } else if (args.length >= 1 && args[0].equalsIgnoreCase("override")) {
+            handleOverride(p, args);
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("renumber")) {
+            handleRenumber(p, args[1]);
         } else if (args.length == 1 && (args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("delete"))) {
 
             CheckpointManager.NearestCheckpointOutput output = checkpointManager.getNearest(p.getLocation());
@@ -259,10 +263,13 @@ public class CheckpointCommand implements BasicCommand {
     }
 
     /**
-     * /checkpoint create <raceName>          - NORMAL (auto-promotes to START_FINISH if the race is empty)
-     * /checkpoint create sector <raceName>   - SECTOR
-     * /checkpoint create finish <raceName>   - START_FINISH (explicit)
+     * /checkpoint create <raceName> [id]          - NORMAL (auto-promotes to START_FINISH if the race is empty)
+     * /checkpoint create sector <raceName> [id]   - SECTOR
+     * /checkpoint create finish <raceName> [id]   - START_FINISH (explicit)
      * Also accepts the legacy "/checkpoint create <raceName> SECTOR" form for muscle-memory compat.
+     *
+     * When an ID is given the checkpoint is inserted at that position and every existing
+     * checkpoint at or after it is shifted up by one. Without an ID it is appended.
      */
     private void handleCreate(Player p, String[] args) {
         if (args.length < 2) {
@@ -277,18 +284,29 @@ public class CheckpointCommand implements BasicCommand {
             return;
         }
 
-        String raceName;
+        String raceName = null;
         Checkpoint.Type explicitType = null;
+        int idArgIndex = -1;
 
-        if (args.length >= 3 && (args[1].equalsIgnoreCase("sector") || args[1].equalsIgnoreCase("finish"))) {
+        if (args[1].equalsIgnoreCase("sector") || args[1].equalsIgnoreCase("finish")) {
             explicitType = args[1].equalsIgnoreCase("sector") ? Checkpoint.Type.SECTOR : Checkpoint.Type.START_FINISH;
-            raceName = args[2];
-        } else if (args.length >= 3 && args[2].equalsIgnoreCase("SECTOR")) {
-            // legacy form
-            explicitType = Checkpoint.Type.SECTOR;
-            raceName = args[1];
+            if (args.length >= 3) {
+                raceName = args[2];
+                idArgIndex = 3;
+            }
         } else {
             raceName = args[1];
+            idArgIndex = 2;
+            // legacy form: /checkpoint create <raceName> SECTOR [id]
+            if (args.length >= 3 && args[2].equalsIgnoreCase("SECTOR")) {
+                explicitType = Checkpoint.Type.SECTOR;
+                idArgIndex = 3;
+            }
+        }
+
+        if (raceName == null) {
+            p.sendMessage(getMessage("checkpoint.create.usage"));
+            return;
         }
 
         Race race = raceManager.getRace(raceName);
@@ -297,31 +315,187 @@ public class CheckpointCommand implements BasicCommand {
             return;
         }
 
+        //An explicit ID means we're inserting into the order, which is only safe on a race that isn't moving
+        Integer id = null;
+        if (args.length > idArgIndex) {
+            try {
+                id = Integer.parseInt(args[idArgIndex]);
+            } catch (NumberFormatException e) {
+                p.sendMessage(getMessage("error.invalidNumber"));
+                return;
+            }
+
+            if (!canEditOrder(p, race)) return;
+
+            int maxId = race.getCheckpoints().isEmpty() ? 0 : race.getCheckpoints().size();
+            if (id < 1 || id > maxId + 1) {
+                p.sendMessage(getMessage("checkpoint.idOutOfRange", formatArguments(
+                        "min", "1",
+                        "max", "" + (maxId + 1)
+                )));
+                return;
+            }
+        }
+
         PosSelection.pos1.remove(p);
         PosSelection.pos2.remove(p);
 
-        if (explicitType == Checkpoint.Type.SECTOR) {
-            Checkpoint checkpoint = checkpointManager.saveSectorCheckpoint(race, l1, l2);
+        //An empty race has no start line yet, so the first checkpoint is always the start/finish.
+        if (race.getCheckpoints().isEmpty() && explicitType == null) {
+            Checkpoint checkpoint = id == null
+                    ? checkpointManager.saveCheckpoint(race, l1, l2, Checkpoint.Type.START_FINISH)
+                    : checkpointManager.saveCheckpointAt(race, l1, l2, Checkpoint.Type.START_FINISH, id, true);
             if (checkpoint == null) { p.sendMessage(getMessage("error.unknown")); return; }
-            p.sendMessage(getMessage("checkpoint.sectorSaved", formatArguments("sectorID", "" + checkpoint.getSectorID())));
-            return;
-        }
-
-        if (explicitType == Checkpoint.Type.START_FINISH) {
-            Checkpoint checkpoint = checkpointManager.saveCheckpoint(race, l1, l2, Checkpoint.Type.START_FINISH);
-            if (checkpoint == null) { p.sendMessage(getMessage("error.unknown")); return; }
-            p.sendMessage(getMessage("checkpoint.finishLineSaved"));
-            return;
-        }
-
-        if (race.getCheckpoints().isEmpty()) {
-            checkpointManager.saveCheckpoint(race, l1, l2, Checkpoint.Type.START_FINISH);
             p.sendMessage(getMessage("checkpoint.startLineSaved"));
+            return;
         }
 
-        Checkpoint checkpoint = checkpointManager.saveCheckpoint(race, l1, l2, Checkpoint.Type.NORMAL);
+        Checkpoint.Type type = explicitType == null ? Checkpoint.Type.NORMAL : explicitType;
+
+        //ID 1 must stay the start line: a racer's lap begins by crossing it.
+        if (id != null && id == 1 && type != Checkpoint.Type.START_FINISH) {
+            p.sendMessage(getMessage("checkpoint.startFinishRequired"));
+            return;
+        }
+
+        if (id == null) {
+            Checkpoint checkpoint = checkpointManager.saveCheckpoint(race, l1, l2, type);
+            if (checkpoint == null) { p.sendMessage(getMessage("error.unknown")); return; }
+            reportSaved(p, checkpoint, type, false);
+            return;
+        }
+
+        Checkpoint checkpoint = checkpointManager.saveCheckpointAt(race, l1, l2, type, id, true);
         if (checkpoint == null) { p.sendMessage(getMessage("error.unknown")); return; }
-        p.sendMessage(getMessage("checkpoint.saved", formatArguments("id", String.valueOf(checkpoint.getId()))));
+        reportSaved(p, checkpoint, type, true);
+    }
+
+    /**
+     * /checkpoint override [sector|finish] <raceName> <id>
+     * Replaces the checkpoint at {@code id} in place: same position in the lap order, new
+     * geometry. The old checkpoint's alternate routes and sector ID are discarded.
+     */
+    private void handleOverride(Player p, String[] args) {
+        Location l1 = PosSelection.pos1.get(p);
+        Location l2 = PosSelection.pos2.get(p);
+        if (l1 == null || l2 == null) {
+            p.sendMessage(getMessage("pos.notSet"));
+            return;
+        }
+
+        String raceName;
+        Checkpoint.Type explicitType = null;
+        int idArgIndex;
+
+        if (args.length >= 2 && (args[1].equalsIgnoreCase("sector") || args[1].equalsIgnoreCase("finish"))) {
+            explicitType = args[1].equalsIgnoreCase("sector") ? Checkpoint.Type.SECTOR : Checkpoint.Type.START_FINISH;
+            if (args.length < 4) {
+                p.sendMessage(getMessage("checkpoint.override.usage"));
+                return;
+            }
+            raceName = args[2];
+            idArgIndex = 3;
+        } else {
+            if (args.length < 3) {
+                p.sendMessage(getMessage("checkpoint.override.usage"));
+                return;
+            }
+            raceName = args[1];
+            idArgIndex = 2;
+        }
+
+        Race race = raceManager.getRace(raceName);
+        if (race == null) {
+            p.sendMessage(getMessage("race.notFound"));
+            return;
+        }
+
+        int id;
+        try {
+            id = Integer.parseInt(args[idArgIndex]);
+        } catch (NumberFormatException e) {
+            p.sendMessage(getMessage("error.invalidNumber"));
+            return;
+        }
+
+        if (!canEditOrder(p, race)) return;
+
+        Checkpoint existing = race.getCheckpoint(id);
+        if (existing == null) {
+            p.sendMessage(getMessage("checkpoint.invalid"));
+            return;
+        }
+
+        //Keep the existing type unless one was given explicitly, so an override only moves geometry.
+        Checkpoint.Type type = explicitType == null ? existing.getType() : explicitType;
+
+        if (id == 1 && type != Checkpoint.Type.START_FINISH) {
+            p.sendMessage(getMessage("checkpoint.startFinishRequired"));
+            return;
+        }
+
+        PosSelection.pos1.remove(p);
+        PosSelection.pos2.remove(p);
+
+        Checkpoint checkpoint = checkpointManager.saveCheckpointAt(race, l1, l2, type, id, false);
+        if (checkpoint == null) { p.sendMessage(getMessage("error.unknown")); return; }
+        reportSaved(p, checkpoint, type, false, true);
+    }
+
+    /**
+     * /checkpoint renumber <raceName>
+     * Closes the gaps left by /checkpoint remove, which deletes an ID without shifting the rest.
+     * A gap makes the race impossible to finish, since the next checkpoint is looked up by ID.
+     */
+    private void handleRenumber(Player p, String raceName) {
+        Race race = raceManager.getRace(raceName);
+        if (race == null) {
+            p.sendMessage(getMessage("race.notFound"));
+            return;
+        }
+
+        if (!canEditOrder(p, race)) return;
+
+        int count = checkpointManager.renumber(race);
+        if (count < 0) {
+            p.sendMessage(getMessage("error.unknown"));
+            return;
+        }
+
+        p.sendMessage(getMessage("checkpoint.renumbered", formatArguments(
+                "count", "" + count,
+                "race", race.getName()
+        )));
+    }
+
+    /**
+     * Checkpoint ID surgery rewrites the lap order, so refuse it while a race is using that order.
+     * @return true if the race is idle and the edit can go ahead
+     */
+    private boolean canEditOrder(Player p, Race race) {
+        if (race.isPreparing() || race.isStarting() || race.hasStarted()) {
+            p.sendMessage(getMessage("checkpoint.raceBusy", formatArguments("race", race.getName())));
+            return false;
+        }
+        return true;
+    }
+
+    private void reportSaved(Player p, Checkpoint checkpoint, Checkpoint.Type type, boolean inserted) {
+        reportSaved(p, checkpoint, type, inserted, false);
+    }
+
+    private void reportSaved(Player p, Checkpoint checkpoint, Checkpoint.Type type, boolean inserted, boolean overridden) {
+        if (overridden) {
+            p.sendMessage(getMessage("checkpoint.overridden", formatArguments("id", "" + checkpoint.getId())));
+        } else if (inserted) {
+            p.sendMessage(getMessage("checkpoint.inserted", formatArguments("id", "" + checkpoint.getId())));
+        } else if (type == Checkpoint.Type.SECTOR) {
+            p.sendMessage(getMessage("checkpoint.sectorSaved", formatArguments("sectorID", "" + checkpoint.getSectorID())));
+        } else if (type == Checkpoint.Type.START_FINISH) {
+            p.sendMessage(getMessage("checkpoint.finishLineSaved"));
+        } else {
+            p.sendMessage(getMessage("checkpoint.saved", formatArguments("id", "" + checkpoint.getId())));
+        }
     }
 
     /**
@@ -741,6 +915,8 @@ public class CheckpointCommand implements BasicCommand {
             suggestions.add("list");
             suggestions.add("count");
             suggestions.add("create");
+            suggestions.add("override");
+            suggestions.add("renumber");
             suggestions.add("view");
             suggestions.add("remove");
             suggestions.add("delete");
@@ -753,18 +929,26 @@ public class CheckpointCommand implements BasicCommand {
         }
 
         switch (args[0].toLowerCase()) {
-            case "create" -> {
+            case "create", "override" -> {
                 if (args.length == 2) {
                     suggestions.add("sector");
                     suggestions.add("finish");
                     for (Race race : raceManager.races) suggestions.add(race.getName());
                 } else if (args.length == 3) {
+                    //Either <race> (for the plain form) or <id> (for create sector/finish <race> <id>)
+                    for (Race race : raceManager.races) suggestions.add(race.getName());
+                } else if (args.length == 4) {
+                    addIds(args[1].equalsIgnoreCase("sector") || args[1].equalsIgnoreCase("finish") ? args[2] : args[1], suggestions);
+                }
+            }
+            case "renumber" -> {
+                if (args.length == 2) {
                     for (Race race : raceManager.races) suggestions.add(race.getName());
                 }
             }
             case "remove", "delete" -> {
                 if (args.length == 2) {
-                    for (int i = 0; i < checkpointManager.count(); i++) suggestions.add("" + i);
+                    addIds(null, suggestions);
                 } else if (args.length == 3) {
                     for (Race race : raceManager.races) suggestions.add(race.getName());
                 }
@@ -819,6 +1003,23 @@ public class CheckpointCommand implements BasicCommand {
         }
 
         return suggestions;
+    }
+
+    /**
+     * Adds checkpoint IDs to {@code suggestions}. When {@code raceName} is null every race's
+     * checkpoints are listed, since the plain remove form doesn't know the race yet.
+     */
+    private void addIds(String raceName, List<String> suggestions) {
+        if (raceName == null) {
+            for (Race race : raceManager.races) {
+                for (Checkpoint cp : race.getCheckpoints()) suggestions.add("" + cp.getId());
+            }
+            return;
+        }
+
+        Race race = raceManager.getRace(raceName);
+        if (race == null) return;
+        for (Checkpoint cp : race.getCheckpoints()) suggestions.add("" + cp.getId());
     }
 
     @Override

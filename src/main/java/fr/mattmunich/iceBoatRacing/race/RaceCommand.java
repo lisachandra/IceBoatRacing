@@ -19,6 +19,7 @@ import java.util.Collection;
 import java.util.List;
 
 import static fr.mattmunich.iceBoatRacing.Main.err;
+import static fr.mattmunich.iceBoatRacing.Main.INTERMISSION_SECONDS;
 import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
 import static fr.mattmunich.iceBoatRacing.PosSelection.pos1;
 import static fr.mattmunich.iceBoatRacing.PosSelection.pos2;
@@ -37,18 +38,52 @@ public class RaceCommand implements BasicCommand {
     @Override
     public void execute(@NonNull CommandSourceStack source, String @NonNull [] args) {
         CommandSender sender = source.getSender();
+
+        //Player-level subcommands: open to anyone with the join permission, no admin rights needed
+        if (args.length >= 1 && (args[0].equalsIgnoreCase("join") || args[0].equalsIgnoreCase("leave"))) {
+            handleJoinLeave(sender, args);
+            return;
+        }
+
+        //Everything below is administrative
+        if (!sender.hasPermission("iceboatracing.command.race")) {
+            sender.sendMessage(getMessage("error.noPermission"));
+            return;
+        }
+
         if(args.length >= 1 && args[0].equalsIgnoreCase("start")) {
             ParsedResult parsedResult = parseRace(args, sender);
             if (parsedResult == null) return;
             Race race = parsedResult.race();
 
-            sender.sendMessage(getMessage("race.start", Messages.formatArguments("race", race.getName())));
+            //Only announce the start once we know it can actually start
+            if (race.racers.isEmpty()) {
+                sender.sendMessage(getMessage("race.intermission.cannotStartEmpty", Messages.formatArguments("race", race.getName())));
+                return;
+            }
+
             Result result = race.start();
-            if(result == Result.ERROR) sender.sendMessage(getMessage("error.unknown"));
+            if(result == Result.ERROR) {
+                sender.sendMessage(getMessage("error.unknown"));
+            } else if (result == Result.WARN) {
+                sender.sendMessage(getMessage("race.intermission.cannotStartEmpty", Messages.formatArguments("race", race.getName())));
+            } else {
+                sender.sendMessage(getMessage("race.start", Messages.formatArguments("race", race.getName())));
+            }
         } else if(args.length >= 1 && args[0].equalsIgnoreCase("end")) {
             ParsedResult parsedResult = parseRace(args, sender);
             if (parsedResult == null) return;
             Race race = parsedResult.race();
+
+            //Still in registration: nothing has started, so just close it instead of trying to
+            //send a ranking for an empty race.
+            if (race.isPreparing()) {
+                raceManager.closeRegistration(race);
+                race.racers.clear();
+                raceManager.activeRaces.remove(race);
+                sender.sendMessage(getMessage("race.intermission.cancelled", Messages.formatArguments("race", race.getName())));
+                return;
+            }
 
             try {
                 race.end(true);
@@ -67,7 +102,21 @@ public class RaceCommand implements BasicCommand {
             if (parsedResult == null) return;
             Race race = parsedResult.race();
 
-            race.togglePrepare(sender);
+            //Optional duration: /race prepare [race] [seconds]
+            int seconds = INTERMISSION_SECONDS;
+            String durationArg = parsedResult.definedRaceName()
+                    ? (args.length >= 3 ? args[2] : null)
+                    : (args.length >= 2 ? args[1] : null);
+            if (durationArg != null) {
+                try {
+                    seconds = Integer.parseInt(durationArg);
+                } catch (NumberFormatException e) {
+                    sender.sendMessage(getMessage("error.invalidNumber"));
+                    return;
+                }
+            }
+
+            race.openRegistration(sender, seconds);
         } else if (args.length == 1 && args[0].equalsIgnoreCase("create")) {
             if(!(sender instanceof Player p)) {
                 sender.sendMessage(getMessage("error.playerToExecuteCommand"));
@@ -116,6 +165,51 @@ public class RaceCommand implements BasicCommand {
         } else {
             sender.sendMessage(getMessage("race.help"));
         }
+    }
+
+    /**
+     * /race join [raceName]
+     * /race leave [raceName]
+     * The opt-in entry point: players add themselves to an open race registration. If only one
+     * race is loaded the name can be omitted.
+     */
+    private void handleJoinLeave(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player p)) {
+            sender.sendMessage(getMessage("error.playerToExecuteCommand"));
+            return;
+        }
+
+        boolean join = args[0].equalsIgnoreCase("join");
+
+        Race race;
+        if (args.length >= 2) {
+            race = raceManager.getRace(args[1]);
+            if (race == null) {
+                p.sendMessage(getMessage("race.notFound"));
+                return;
+            }
+        } else {
+            //No name given: only unambiguous when exactly one race exists or the player is registered somewhere
+            List<Race> open = new ArrayList<>();
+            for (Race candidate : raceManager.races) {
+                if (join ? candidate.isPreparing() && !candidate.hasStarted() : candidate.racers.containsKey(p.getUniqueId())) {
+                    open.add(candidate);
+                }
+            }
+
+            if (open.size() == 1) {
+                race = open.getFirst();
+            } else if (open.isEmpty()) {
+                p.sendMessage(getMessage(join ? "race.intermission.noneOpen" : "race.intermission.notJoinedAny"));
+                return;
+            } else {
+                p.sendMessage(getMessage("race.intermission.specifyRace"));
+                return;
+            }
+        }
+
+        if (join) raceManager.joinRace(p, race);
+        else raceManager.leaveRace(p, race);
     }
 
     private void handlePitStops(String @NonNull [] args, int valueArgIndex, CommandSender sender, Race finalRace) {
@@ -211,8 +305,12 @@ public class RaceCommand implements BasicCommand {
     private @Nullable ParsedResult parseRace(String @NonNull [] args, CommandSender sender) {
         Race race;
         boolean definedRaceName = false;
-        if(raceManager.races.size() != 1 || args.length == 3) {
-            if(args.length < 2 || args.length > 3) {
+        //The duration form of /race prepare takes one extra trailing argument
+        boolean allowsExtraArg = args.length >= 1 && args[0].equalsIgnoreCase("prepare");
+        int maxArgs = allowsExtraArg ? 4 : 3;
+
+        if(raceManager.races.size() != 1 || args.length == 3 || args.length == 4) {
+            if(args.length < 2 || args.length > maxArgs) {
                 sender.sendMessage(getMessage("race.help"));
                 return null;
             }
@@ -317,7 +415,27 @@ public class RaceCommand implements BasicCommand {
     @Override
     public @NonNull Collection<String> suggest(@NonNull CommandSourceStack commandSourceStack, String @NonNull [] args) {
         List<String> suggestions = new ArrayList<>();
-        List<String> baseSuggestions = List.of("start","prepare","end","create","delete", "setLapCount","setPitStops","setStartRotation", "setLights");
+
+        CommandSender sender = commandSourceStack.getSender();
+        boolean admin = sender.hasPermission("iceboatracing.command.race");
+
+        if (!admin) {
+            //Non-admins can only join/leave
+            List<String> playerCommands = List.of("join", "leave");
+            if (args.length == 0) return playerCommands;
+            if (args.length == 1) {
+                StringUtil.copyPartialMatches(args[0], playerCommands, suggestions);
+                return suggestions;
+            }
+            if (args.length == 2 && (args[0].equalsIgnoreCase("join") || args[0].equalsIgnoreCase("leave"))) {
+                List<String> raceList = new ArrayList<>();
+                for (Race race : raceManager.getRaces()) raceList.add(race.getName());
+                StringUtil.copyPartialMatches(args[1], raceList, suggestions);
+            }
+            return suggestions;
+        }
+
+        List<String> baseSuggestions = List.of("start","prepare","end","create","delete","join","leave", "setLapCount","setPitStops","setStartRotation", "setLights");
 
         List<Race> races =  raceManager.getRaces();
         List<String> raceList;
@@ -338,6 +456,8 @@ public class RaceCommand implements BasicCommand {
                     || args[0].equalsIgnoreCase("prepare")
                     || args[0].equalsIgnoreCase("end")
                     || args[0].equalsIgnoreCase("delete")
+                    || args[0].equalsIgnoreCase("join")
+                    || args[0].equalsIgnoreCase("leave")
                     || args[0].equalsIgnoreCase("setLapCount")
                     || args[0].equalsIgnoreCase("setPitStops")
                     || args[0].equalsIgnoreCase("setStartRotation")
@@ -346,7 +466,9 @@ public class RaceCommand implements BasicCommand {
         ) {
             StringUtil.copyPartialMatches(args[1], raceList, suggestions);
         } else if (args.length==3) {
-            if(args[0].equalsIgnoreCase("setLapCount")) {
+            if(args[0].equalsIgnoreCase("prepare")) {
+                suggestions = List.of("§7<seconds>");
+            } else if(args[0].equalsIgnoreCase("setLapCount")) {
                 suggestions = List.of("§7<lapCount>");
             } else if(args[0].equalsIgnoreCase("setPitStops")) {
                 suggestions = List.of("§7<requiredPitStops>");
@@ -359,13 +481,23 @@ public class RaceCommand implements BasicCommand {
         return suggestions;
     }
 
+    /**
+     * Both admins and ordinary players can run this command: /race join and /race leave are open
+     * to everyone with the join permission, while every other subcommand re-checks
+     * {@code iceboatracing.command.race} inside {@link #execute}.
+     */
     @Override
     public boolean canUse(@NonNull CommandSender sender) {
-        return BasicCommand.super.canUse(sender);
+        return sender.hasPermission("iceboatracing.command.race")
+                || sender.hasPermission("iceboatracing.command.race.join");
     }
 
+    /**
+     * Must stay null: returning a permission here would gate the whole command root, which would
+     * also lock ordinary players out of /race join. Admin subcommands check their own permission.
+     */
     @Override
     public @Nullable String permission() {
-        return "iceboatracing.command.race";
+        return null;
     }
 }
