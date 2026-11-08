@@ -4,6 +4,7 @@ import fr.mattmunich.iceBoatRacing.Main;
 import fr.mattmunich.iceBoatRacing.checkpoint.Checkpoint;
 import fr.mattmunich.iceBoatRacing.checkpoint.CheckpointGeometry;
 import fr.mattmunich.iceBoatRacing.checkpoint.CheckpointManager;
+import fr.mattmunich.iceBoatRacing.checkpoint.CheckpointRenderer;
 import fr.mattmunich.iceBoatRacing.race.Race;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -18,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static fr.mattmunich.iceBoatRacing.Main.warn;
 import static fr.mattmunich.iceBoatRacing.Messages.formatArguments;
 import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
 
@@ -27,6 +29,9 @@ public class AutoTraceManager {
     private static final double LOOP_CLOSE_THRESHOLD = 3.0;
     private static final double MIN_DISTANCE_BEFORE_LOOP_CHECK = 20.0;
     private static final double MAX_HALF_WIDTH_MULTIPLIER = 3.0;
+
+    /** Redraw cadence for the preview, in ticks — short enough that particles never visibly lapse. */
+    private static final long PREVIEW_PERIOD = 10L;
 
     private final Main main;
     private final CheckpointManager checkpointManager;
@@ -121,9 +126,7 @@ public class AutoTraceManager {
     public void cancel(Player p) {
         stop(p);
         sessions.remove(p);
-
-        org.bukkit.scheduler.BukkitTask previewTask = previewTasks.remove(p);
-        if (previewTask != null) previewTask.cancel();
+        stopPreview(p);
     }
 
     /**
@@ -175,7 +178,7 @@ public class AutoTraceManager {
         if (session == null || session.centerline.isEmpty()) return false;
 
         Location center = CheckpointGeometry.midpoint(l1, l2);
-        double halfWidth = Math.max(l1.distance(l2) / 2.0, 0.5);
+        double halfWidth = CheckpointGeometry.spanHalfWidth(l1, l2, 0);
         double heightDiff = Math.abs(l1.getY() - l2.getY());
         double halfHeight = heightDiff > 0.5 ? heightDiff / 2.0 : session.halfHeight;
 
@@ -191,6 +194,8 @@ public class AutoTraceManager {
         double arcLength = session.centerlineArcLengths[nearestIndex];
         insertByArcLength(session, sector, arcLength);
 
+        ensurePreview(p);
+        refreshPreview(p);
         return true;
     }
 
@@ -235,7 +240,7 @@ public class AutoTraceManager {
         if (rawNormal.lengthSquared() < 1e-6) rawNormal = new Vector(1, 0, 0);
 
         Location center = CheckpointGeometry.midpoint(l1, l2);
-        double halfWidth = Math.max(l1.distance(l2) / 2.0 + CheckpointGeometry.WIDTH_PADDING, 0.5);
+        double halfWidth = CheckpointGeometry.spanHalfWidth(l1, l2, CheckpointGeometry.WIDTH_PADDING);
         double heightDiff = Math.abs(l1.getY() - l2.getY());
         double halfHeight = heightDiff > 0.5 ? heightDiff / 2.0 : session.halfHeight;
 
@@ -260,6 +265,8 @@ public class AutoTraceManager {
         double arcLength = session.centerlineArcLengths[insertIndex];
         insertByArcLength(session, marker, arcLength);
 
+        ensurePreview(p);
+        refreshPreview(p);
         return true;
     }
 
@@ -280,20 +287,26 @@ public class AutoTraceManager {
         if (nearest.index() < 0) return null;
 
         Checkpoint original = session.preview.get(nearest.index());
-//        Vector right = original.getRight();́
-        //Old checkpoint doesn't influence new checkpoint
-        session.centerline.remove(nearest.index());
-        Vector normal = CheckpointGeometry.smoothTangentAt(session.centerline, nearest.index(), session.loop, 2);
-        if(normal == null) normal = original.getNormal();
+        //The preview and the centerline are not 1:1 (sector markers are inserted into the preview
+        //only), so locate the old gate on the centerline by position instead of reusing its index.
+        int centerlineIndex = CheckpointGeometry.nearestIndex(session.centerline, original.getCenter());
 
-        double newHalfWidth = l1.distance(l2)/2;
+        Vector normal = CheckpointGeometry.smoothTangentAt(session.centerline, centerlineIndex, session.loop, 2);
+        if (normal == null) normal = original.getNormal();
+
+        double newHalfWidth = CheckpointGeometry.spanHalfWidth(l1, l2, 0);
 
         Checkpoint replacement = new Checkpoint(original.getId(), center, normal, newHalfWidth, original.getHalfHeight(), original.getType());
         if (original.getType() == Checkpoint.Type.SECTOR) replacement.setSectorID(original.getSectorID());
-        session.preview.remove(original);
-        session.preview.add(nearest.index(), replacement);
-        //Update centerline
-        session.centerline.add(nearest.index(), center);
+        session.preview.set(nearest.index(), replacement);
+
+        //Move the centerline point too, and keep the cached arc lengths in step so a sector added
+        //afterwards is still inserted at the right lap position.
+        if (!session.centerline.isEmpty()) {
+            session.centerline.set(centerlineIndex, center);
+            session.centerlineArcLengths = CheckpointGeometry.cumulativeArcLengths(session.centerline);
+        }
+
         return new EditInfo(nearest.index() + 1, replacement.getType(), nearest.distance());
     }
 
@@ -310,8 +323,13 @@ public class AutoTraceManager {
         NearestResult nearest = findNearestPreviewCheckpoint(session, point);
         if (nearest.index() < 0) return null;
 
-        session.centerline.remove(nearest.index());
         Checkpoint removed = session.preview.remove(nearest.index());
+        int centerlineIndex = CheckpointGeometry.nearestIndex(session.centerline, removed.getCenter());
+        if (!session.centerline.isEmpty()) {
+            session.centerline.remove(centerlineIndex);
+            session.centerlineArcLengths = CheckpointGeometry.cumulativeArcLengths(session.centerline);
+        }
+
         return new EditInfo(nearest.index() + 1, removed.getType(), nearest.distance());
     }
 
@@ -319,7 +337,11 @@ public class AutoTraceManager {
         int best = -1;
         double bestDist = MAX_EDIT_DISTANCE;
         for (int i = 0; i < session.preview.size(); i++) {
-            double d = session.preview.get(i).getCenter().distance(point);
+            Location center = session.preview.get(i).getCenter();
+            //The player may have wandered into another world since the recording.
+            if (center.getWorld() == null || !center.getWorld().equals(point.getWorld())) continue;
+
+            double d = center.distance(point);
             if (d < bestDist) {
                 bestDist = d;
                 best = i;
@@ -329,8 +351,8 @@ public class AutoTraceManager {
     }
 
     /**
-     * Toggles the particle preview on/off. While on, redraws every second until toggled off,
-     * the session ends, or the preview list changes shape drastically.
+     * Toggles the particle preview on/off. While on, redraws on a short timer until toggled off,
+     * the session ends, or the player disconnects.
      * @return true if the preview is now ON, false if it's now OFF (or couldn't start)
      */
     public boolean togglePreview(Player p) {
@@ -339,70 +361,89 @@ public class AutoTraceManager {
             existing.cancel();
             return false;
         }
+        return ensurePreview(p) != null;
+    }
+
+    /**
+     * Starts the preview if it isn't already running, so an edit is visible straight away without a
+     * separate {@code /checkpoint autotrace preview}.
+     * @return the running task, or null if there is no preview to show
+     */
+    public BukkitTask ensurePreview(Player p) {
+        BukkitTask existing = previewTasks.get(p);
+        if (existing != null) return existing;
 
         AutoTraceSession session = sessions.get(p);
-        if (session == null || session.preview.isEmpty()) return false;
+        if (session == null || session.preview.isEmpty()) return null;
 
         BukkitTask task = Bukkit.getScheduler().runTaskTimer(main, () -> {
             AutoTraceSession s = sessions.get(p);
-            if (s == null || s.preview.isEmpty()) {
+            if (!p.isOnline() || s == null || s.preview.isEmpty()) {
                 BukkitTask t = previewTasks.remove(p);
                 if (t != null) t.cancel();
                 return;
             }
-            for (Checkpoint cp : s.preview) drawCheckpointOutline(cp);
+
+            for (Checkpoint cp : s.preview) {
+                try {
+                    CheckpointRenderer.render(p, cp);
+                } catch (RuntimeException e) {
+                    //One malformed gate must not kill the whole preview.
+                    warn("Couldn't draw a preview checkpoint of race " + s.race.getName() + ": " + e.getMessage());
+                }
+            }
 
             //Draw center line (smooth)
+            if (s.centerline.isEmpty()) return;
             ArrayList<Location> cl = new ArrayList<>(s.centerline);
             World world = cl.getFirst().getWorld();
+            if (world == null) return;
+
             List<Location> smoothed = CheckpointGeometry.catmullRomSpline(cl, s.loop, 6); // 6 substeps ≈ smooth at typical spacing
             for (int i = 0; i < smoothed.size() - 1; i++) {
-                drawLine(world, Particle.TOTEM_OF_UNDYING, smoothed.get(i).clone().add(0, 1, 0).toVector(), smoothed.get(i+1).clone().add(0, 1, 0).toVector());
+                line(p, world, Particle.TOTEM_OF_UNDYING, smoothed.get(i).clone().add(0, 1, 0).toVector(), smoothed.get(i+1).clone().add(0, 1, 0).toVector());
             }
             if (s.loop && smoothed.size() > 1) {
-                drawLine(world, Particle.TOTEM_OF_UNDYING, smoothed.getLast().clone().add(0, 1, 0).toVector(), smoothed.getFirst().clone().add(0, 1, 0).toVector());
+                line(p, world, Particle.TOTEM_OF_UNDYING, smoothed.getLast().clone().add(0, 1, 0).toVector(), smoothed.getFirst().clone().add(0, 1, 0).toVector());
             }
-        }, 0L, 20L);
+        }, 0L, PREVIEW_PERIOD);
 
         previewTasks.put(p, task);
-        return true;
+        return task;
     }
 
-    private void drawCheckpointOutline(Checkpoint cp) {
-        Location center = cp.getCenter();
-        Vector right = cp.getRight();
-        Vector up = cp.getUp();
-        double hw = cp.getHalfWidth();
-        double hh = cp.getHalfHeight();
+    /** Redraws {@code p}'s preview immediately, if one is running. */
+    public void refreshPreview(Player p) {
+        BukkitTask task = previewTasks.get(p);
+        if (task == null) return;
 
-        Vector rightHW = right.clone().multiply(hw);
-        Vector upHH = up.clone().multiply(hh);
+        AutoTraceSession s = sessions.get(p);
+        if (s == null) return;
 
-        Vector topRight = center.toVector().add(rightHW).add(upHH);
-        Vector bottomRight = center.toVector().add(rightHW).subtract(upHH);
-        Vector bottomLeft = center.toVector().subtract(rightHW).subtract(upHH);
-        Vector topLeft = center.toVector().subtract(rightHW).add(upHH);
-
-        Particle particle = switch (cp.getType()) {
-            case START_FINISH -> Particle.FLAME;
-            case SECTOR -> Particle.HAPPY_VILLAGER;
-            default -> Particle.END_ROD;
-        };
-
-        drawLine(center.getWorld(), particle, topRight, bottomRight);
-        drawLine(center.getWorld(), particle, bottomRight, bottomLeft);
-        drawLine(center.getWorld(), particle, bottomLeft, topLeft);
-        drawLine(center.getWorld(), particle, topLeft, topRight);
+        for (Checkpoint cp : s.preview) {
+            try {
+                CheckpointRenderer.render(p, cp);
+            } catch (RuntimeException ignored) {
+            }
+        }
     }
 
-    private void drawLine(org.bukkit.World world, Particle particle, Vector from, Vector to) {
+    /** Stops the preview task and clears the session — used when the session is accepted or cancelled. */
+    private void stopPreview(Player p) {
+        BukkitTask task = previewTasks.remove(p);
+        if (task != null) task.cancel();
+    }
+
+    private void line(Player viewer, World world, Particle particle, Vector from, Vector to) {
+        if (!world.equals(viewer.getWorld())) return;
+
         double length = from.distance(to);
-        int steps = Math.max(1, (int) (length / 0.4));
+        int steps = Math.max(1, (int) (length / 0.5));
         Vector step = to.clone().subtract(from).multiply(1.0 / steps);
 
         Vector cursor = from.clone();
         for (int i = 0; i <= steps; i++) {
-            world.spawnParticle(particle, cursor.getX(), cursor.getY(), cursor.getZ(), 1, 0, 0, 0, 0);
+            viewer.spawnParticle(particle, cursor.getX(), cursor.getY(), cursor.getZ(), 1, 0, 0, 0, 0);
             cursor.add(step);
         }
     }
@@ -419,8 +460,7 @@ public class AutoTraceManager {
         boolean success = checkpointManager.saveTracedCheckpoints(session.race, session.preview);
         if (success) {
             sessions.remove(p);
-            org.bukkit.scheduler.BukkitTask previewTask = previewTasks.remove(p);
-            if (previewTask != null) previewTask.cancel();
+            stopPreview(p);
         }
         return success;
     }

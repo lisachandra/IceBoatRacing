@@ -15,8 +15,10 @@ import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Boat;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
@@ -299,9 +301,8 @@ public class RaceManager {
         config.set("name", race.getName());
         config.set("world", race.getWorld().getName());
         config.set("lapCount", race.getLapCount());
-        config.set("startRotation", race.getStartRotation());
         config.set("requiredPitStops", race.getRequiredPitStops());
-        config.set("startRotation", 0);
+        config.set("startRotation", race.getStartRotation());
         config.set("lights.enabled", false);
 
         try {
@@ -340,12 +341,10 @@ public class RaceManager {
                 return false;
             }
 
-            try {
-                config.save(raceFile);
-            } catch (IOException e) {
-                err("Couldn't save race " + race.getName(),e);
-                return false;
-            }
+            //Swap in the freshly loaded config first: loadRaceCheckpoints/loadCars/loadRacePitBoxes
+            //all read race.getConfig(), so assigning it afterwards made /ibr reload rebuild from the
+            //stale in-memory object and never pick up edits made to the file.
+            race.setConfig(config);
 
             int lapCount = config.getInt("lapCount");
             if (lapCount <= 0) {
@@ -389,7 +388,6 @@ public class RaceManager {
             carManager.loadCars(race);
             checkpointManager.loadRaceCheckpoints(race);
             pitBoxManager.loadRacePitBoxes(race);
-            race.setConfig(config);
 
             //Update race in race list
             races.remove(race);
@@ -414,6 +412,9 @@ public class RaceManager {
     public boolean deleteRace(Race race) {
         log("Deleting race " + race.getName());
         try { race.end(false); } catch (Exception ignored) {}
+
+        //A deleted race's checkpoint list stays in memory, so a running preview would keep drawing it.
+        main.getCheckpointPreview().stopRace(race);
 
         File raceFile = new File(main.getDataFolder(), "races/" + race.getName().replace(" ","_") + ".yml");
         boolean deleted = raceFile.delete();
@@ -461,7 +462,10 @@ public class RaceManager {
             return;
         }
 
-        File file = new File(racesFolder, race.getName() + ".yml");
+        //Must match the name every other path uses (createRace, updateRace, deleteRace,
+        //getRaceConfig): a race called "My Race" is stored as My_Race.yml, so saving under the raw
+        //name forked the race into a second file that shadowed the real one on the next load.
+        File file = new File(racesFolder, race.getName().replace(" ", "_") + ".yml");
         config.save(file);
     }
 
@@ -521,6 +525,9 @@ public class RaceManager {
         race.participantCount = race.racers.size();
         if (!activeRaces.contains(race)) activeRaces.add(race);
 
+        //Capture each boat's exact grid spot (position + start rotation) right after spawning, so
+        //the grid lock below can hold them there until the lights go green.
+        final Map<UUID, Location> gridPositions = new HashMap<>();
         for (Racer racer : new ArrayList<>(race.racers.values())) {
             Player player = racer.player;
             if (player == null || !player.isOnline()) continue;
@@ -530,6 +537,9 @@ public class RaceManager {
             }
 
             carManager.spawnCar(race, racer.car, player);
+            if (racer.car.getBoat() != null) {
+                gridPositions.put(player.getUniqueId(), racer.car.getBoat().getLocation().clone());
+            }
 
             racer.racing = true;
             racer.checkpointIndex = -1;
@@ -541,6 +551,28 @@ public class RaceManager {
             if (!race.racing.contains(racer)) race.racing.add(racer);
             liveScoreManager.addRacer(racer);
         }
+
+        //Hard grid lock: while the countdown runs, zero every boat's velocity and snap it back to
+        //its starting spot every tick. The VehicleMoveEvent teleport-back alone fights client-side
+        //prediction, so drivers could still nudge and drift their boat before "GO!". Runs until
+        //the countdown actually stops (startingRace flips to false on "GO!", or if the race is
+        //ended early), so drivers can't move until the race has actually started.
+        final BukkitTask[] gridLock = new BukkitTask[1];
+        gridLock[0] = Bukkit.getScheduler().runTaskTimer(main, () -> {
+            if (!race.isStarting()) {
+                gridLock[0].cancel();
+                return;
+            }
+            for (Map.Entry<UUID, Racer> entry : race.racers.entrySet()) {
+                Location spot = gridPositions.get(entry.getKey());
+                if (spot == null) continue;
+                Car car = entry.getValue().car;
+                if (car == null || car.getBoat() == null) continue;
+                Boat boat = car.getBoat();
+                boat.setVelocity(new Vector(0, 0, 0));
+                boat.teleport(spot);
+            }
+        }, 0L, 1L);
 
         final int[] timesRun = {0};
         final BukkitTask[] task = new BukkitTask[1];
@@ -802,7 +834,7 @@ public class RaceManager {
         race.racers.remove(player.getUniqueId());
         race.racing.remove(racer);
         liveScoreManager.removeRacer(racer);
-        if (racer.pittingBox != null) pitBoxManager.cancelSession(player, racer.pittingBox);
+        if (racer.pittingBox != null) pitBoxManager.cancelSession(player);
 
         //destroy() removes the boat entity and clears Car.boat, so this is safe to call whether
         //or not the racer was already placed in it
@@ -871,7 +903,7 @@ public class RaceManager {
 
         for (Racer racer : new ArrayList<>(race.racers.values())) {
             Player owner = racer.player;
-            if (owner != null && racer.pittingBox != null) pitBoxManager.cancelSession(owner, racer.pittingBox);
+            if (owner != null && racer.pittingBox != null) pitBoxManager.cancelSession(owner);
 
             if (racer.car != null) racer.car.destroy();
             racer.racing = false;

@@ -58,6 +58,8 @@ public class WorldLoad implements Listener {
             } catch (Exception ignored) {}
 
             raceManager.races.remove(race);
+            //The race object keeps its checkpoint list, so without this its preview would keep drawing.
+            main.getCheckpointPreview().stopRace(race);
             main.log("Successfully saved " + race.getName() + " on world unload.");
         }
     }

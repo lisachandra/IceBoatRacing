@@ -39,6 +39,10 @@ public class RaceListener implements Listener {
     public void onMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
 
+        //Chest pit stops are served on foot, so keep watching the box zone even while the
+        //driver is not in their boat (walking out abandons the stop)
+        pitBoxManager.handleChestSessionMove(player, event.getTo());
+
         if (!player.isInsideVehicle()) return;
         if (!(player.getVehicle() instanceof Boat)) return;
 
@@ -356,7 +360,6 @@ public class RaceListener implements Listener {
 
         for (PitBox box : race.getPitBoxes()) {
             if (!box.contains(to)) continue;
-            if (box.isOccupied()) continue;
             if (!box.isAllowed(player)) continue;
 
             pitBoxManager.startSession(player, racer, box);

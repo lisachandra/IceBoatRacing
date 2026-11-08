@@ -96,6 +96,11 @@ public class Connection implements Listener {
             }
 
             racer.racing = false;
+
+            //Drop any active pit-stop session so no countdown keeps ticking for a player who is
+            //gone (CHEST stops would otherwise linger until the race ends)
+            if (racer.pittingBox != null) raceManager.pitBoxManager.cancelSession(p);
+
             Car car = racer.car;
             if (car != null) {
                 race.racing.remove(racer);

@@ -5,12 +5,9 @@ import fr.mattmunich.iceBoatRacing.race.Race;
 import fr.mattmunich.iceBoatRacing.race.RaceManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 
 import java.io.IOException;
@@ -23,23 +20,12 @@ public class CheckpointManager {
     private final Main main;
     private  RaceManager raceManager;
 
-    private final Map<Player,BukkitTask> viewingCheckpoints = new HashMap<>();
-
     public CheckpointManager(Main main) {
         this.main = main;
     }
 
     public void setRaceManager(RaceManager raceManager) {
         this.raceManager = raceManager;
-    }
-
-    /**
-     * Get the checkpoint with a specific ID from a specific race
-     * @param race The race that contains the checkpoint
-     * @param ID The ID of the checkpoint
-     */
-    public Checkpoint get(Race race, int ID) {
-        return ID < race.getCheckpoints().size() ? race.getCheckpoints().get(ID) : null;
     }
 
     /**
@@ -79,6 +65,8 @@ public class CheckpointManager {
         Checkpoint.AlternateRoute nearestAlt = null;
         for(Map.Entry<Race, List<Checkpoint>> entry : getAll().entrySet()) {
             for (Checkpoint checkpoint : entry.getValue()) {
+                if (!sameWorld(loc, checkpoint.getCenter())) continue;
+
                 if (loc.distance(checkpoint.getCenter()) < bestDistance) {
                     bestRace = entry.getKey();
                     bestDistance = loc.distance(checkpoint.getCenter());
@@ -86,6 +74,8 @@ public class CheckpointManager {
                     nearestAlt = null;
                 }
                 for (Checkpoint.AlternateRoute alt : checkpoint.getAlternates()) {
+                    if (!sameWorld(loc, alt.getCenter())) continue;
+
                     if (loc.distance(alt.getCenter()) < bestDistance) {
                         bestRace = entry.getKey();
                         bestDistance = loc.distance(alt.getCenter());
@@ -96,6 +86,11 @@ public class CheckpointManager {
             }
         }
         return new NearestCheckpointOutput(bestRace, nearest, nearestAlt, bestDistance);
+    }
+
+    /** {@link Location#distance} throws across worlds, and races can live in different ones. */
+    private static boolean sameWorld(Location a, Location b) {
+        return a != null && b != null && a.getWorld() != null && a.getWorld().equals(b.getWorld());
     }
 
     public record NearestCheckpointOutput(Race bestRace, Checkpoint checkpoint, Checkpoint.AlternateRoute alt, Double distance) {}
@@ -229,25 +224,39 @@ public class CheckpointManager {
             return -1;
         }
 
+        //Drive the rewrite from the config's own keys, not the in-memory list: an entry the loader
+        //skipped (unknown shape, bad number) must not be deleted by a renumber.
         List<Integer> ids = new ArrayList<>();
-        for (Checkpoint checkpoint : race.getCheckpoints()) ids.add(checkpoint.getId());
+        ConfigurationSection section = config.getConfigurationSection("checkpoints");
+        if (section != null) {
+            for (String key : section.getKeys(false)) {
+                try {
+                    ids.add(Integer.parseInt(key));
+                } catch (NumberFormatException e) {
+                    main.log("§eSkipping non-numeric checkpoint key '" + key + "' on race " + race.getName() + " while renumbering.");
+                }
+            }
+        }
         Collections.sort(ids);
 
         if (ids.isEmpty()) return 0;
 
-        //Grab every section up front, then clear the whole block and write it back at 1..N.
+        //Grab every section up front, then clear the whole block and write it back at 1..N. Null
+        //sections are dropped rather than skipped in place, so the result can't contain a hole.
         List<Map<String, Object>> sections = new ArrayList<>();
         for (int id : ids) {
-            ConfigurationSection section = config.getConfigurationSection("checkpoints." + id);
-            sections.add(section == null ? null : section.getValues(true));
+            ConfigurationSection entry = config.getConfigurationSection("checkpoints." + id);
+            if (entry != null) sections.add(entry.getValues(true));
         }
 
         config.set("checkpoints", null);
         for (int i = 0; i < sections.size(); i++) {
-            Map<String, Object> values = sections.get(i);
-            if (values == null) continue;
             String path = "checkpoints." + (i + 1);
-            for (Map.Entry<String, Object> entry : values.entrySet()) {
+            for (Map.Entry<String, Object> entry : sections.get(i).entrySet()) {
+                //getValues(true) yields each leaf under its full relative path *plus* a live section
+                //object for every intermediate key. Re-setting those objects grafts the old subtree
+                //back in, cycle included, and the next save recurses until the stack dies.
+                if (entry.getValue() instanceof ConfigurationSection) continue;
                 config.set(path + "." + entry.getKey(), entry.getValue());
             }
         }
@@ -261,6 +270,200 @@ public class CheckpointManager {
 
         loadRaceCheckpoints(race);
         return sections.size();
+    }
+
+    /**
+     * Rewrites a checkpoint between BOX and PLANE in place, keeping its ID, type, sector ID and
+     * alternate routes. This is the only way to promote a hand-placed box to an oriented gate: the
+     * shape is fixed when a {@link Checkpoint} is built, and {@code /checkpoint create} always
+     * writes a box.
+     * <p>
+     * BOX to PLANE takes the box's horizontal centre line as the gate span, so the resulting plane
+     * faces the same way the box did (across the tunnel/room the box spanned) and is exactly as
+     * wide. PLANE to BOX keeps the same span and builds a thin box around it, tall enough to cover
+     * the plane's height.
+     *
+     * @param race the race that owns the checkpoint
+     * @param checkpoint the checkpoint to rewrite, read for its current geometry
+     * @param target the shape to convert to
+     * @return the reloaded checkpoint, or null if the conversion or save failed
+     */
+    public Checkpoint convertShape(Race race, Checkpoint checkpoint, Checkpoint.Shape target) {
+        YamlConfiguration config = race.getConfig();
+        if (config == null) {
+            main.log("§cCheckpoint " + checkpoint.getId() + " of race " + race.getName() + " wasn't converted, see cause above.");
+            return null;
+        }
+        if (checkpoint.getShape() == target) return checkpoint;
+
+        String path = "checkpoints." + checkpoint.getId();
+        int id = checkpoint.getId();
+        Checkpoint.Type type = checkpoint.getType();
+
+        if (target == Checkpoint.Shape.PLANE) {
+            Location min = checkpoint.getMin();
+            Location max = checkpoint.getMax();
+            double sizeX = max.getX() - min.getX();
+            double sizeZ = max.getZ() - min.getZ();
+
+            //Facing comes from the track direction between the neighbouring gates, which is what the
+            //auto-tracer uses too, then snapped to a cardinal axis so a hand-placed box becomes a
+            //clean gate rather than one skewed by whatever angle the neighbours happen to sit at.
+            Vector normal = inferTravelNormal(race, checkpoint);
+            if (normal == null) {
+                //No usable neighbour: a box that is flat on one axis was already being used as a
+                //plane, so its thin axis is the facing. A square box falls back to facing Z.
+                normal = sizeX <= sizeZ ? new Vector(1, 0, 0) : new Vector(0, 0, 1);
+            } else {
+                normal = Math.abs(normal.getX()) >= Math.abs(normal.getZ())
+                        ? new Vector(1, 0, 0) : new Vector(0, 0, 1);
+            }
+
+            //The gate spans the axis its normal doesn't point along, so it stays as wide as the box.
+            double halfWidth = normal.getX() != 0 ? sizeZ / 2.0 : sizeX / 2.0;
+
+            Location center = checkpoint.getCenter();
+            double halfHeight = Math.max((max.getY() - min.getY()) / 2.0, 2.5);
+
+            config.set(path + ".shape", Checkpoint.Shape.PLANE.name());
+            config.set(path + ".min", null);
+            config.set(path + ".max", null);
+            config.set(path + ".center", serializePrecise(center));
+            config.set(path + ".normal", serializeVector(normal));
+            config.set(path + ".halfWidth", halfWidth);
+            config.set(path + ".halfHeight", halfHeight);
+        } else {
+            //PLANE to BOX: one block thick along the normal, as wide and tall as the plane.
+            Location center = checkpoint.getCenter();
+            double halfWidth = checkpoint.getHalfWidth();
+            double halfHeight = checkpoint.getHalfHeight();
+            Vector normal = checkpoint.getNormal() == null ? new Vector(0, 0, 1) : checkpoint.getNormal();
+
+            boolean alongX = Math.abs(normal.getX()) >= Math.abs(normal.getZ());
+            double thickness = 1.0;
+            double spanX = alongX ? halfWidth : thickness;
+            double spanZ = alongX ? thickness : halfWidth;
+
+            //YAML stores corners, and Checkpoint#boxMax widens the upper one by one on load, so the
+            //stored max has to be the extent minus one or the box comes back a block too big.
+            Location boxMin = new Location(center.getWorld(),
+                    center.getX() - spanX, center.getY() - halfHeight, center.getZ() - spanZ);
+            Location boxMax = new Location(center.getWorld(),
+                    center.getX() + spanX - 1, center.getY() + halfHeight - 1, center.getZ() + spanZ - 1);
+
+            config.set(path + ".shape", Checkpoint.Shape.BOX.name());
+            config.set(path + ".center", null);
+            config.set(path + ".normal", null);
+            config.set(path + ".halfWidth", null);
+            config.set(path + ".halfHeight", null);
+            config.set(path + ".min", serialize(boxMin));
+            config.set(path + ".max", serialize(boxMax));
+        }
+
+        try {
+            race.saveConfig();
+        } catch (IOException e) {
+            err("Couldn't convert checkpoint " + id + " of race " + race.getName() + " to " + target + " because the it's config threw an error on saving. ", e);
+            return null;
+        }
+
+        loadRaceCheckpoints(race);
+        return race.getCheckpoint(id);
+    }
+
+    /**
+     * Direction of travel through {@code checkpoint}, taken from the line between its neighbours in
+     * the lap order. Uses the neighbouring checkpoints' centres, so it works for a box that has no
+     * orientation of its own.
+     * @return a horizontal unit vector pointing along the track at that gate, or null when there is
+     *         no usable neighbour (a one-checkpoint race, or a gate placed on top of its neighbour)
+     */
+    private Vector inferTravelNormal(Race race, Checkpoint checkpoint) {
+        List<Checkpoint> checkpoints = race.getCheckpoints();
+        int index = checkpoints.indexOf(checkpoint);
+        if (index < 0) return null;
+
+        Checkpoint previous = index > 0 ? checkpoints.get(index - 1) : null;
+        Checkpoint next = index + 1 < checkpoints.size() ? checkpoints.get(index + 1) : null;
+
+        //A lap is a loop, so the first gate can borrow the last one and vice versa.
+        if (previous == null) previous = checkpoints.size() > 1 ? checkpoints.getLast() : null;
+        if (next == null) next = checkpoints.size() > 1 ? checkpoints.getFirst() : null;
+        if (previous == null || next == null || previous == checkpoint || next == checkpoint) return null;
+
+        Location center = checkpoint.getCenter();
+        if (!sameWorld(center, previous.getCenter()) || !sameWorld(center, next.getCenter())) return null;
+
+        //Average the two incoming/outgoing directions so a sharp corner doesn't skew the gate.
+        Vector incoming = center.toVector().subtract(previous.getCenter().toVector()).setY(0);
+        Vector outgoing = next.getCenter().toVector().subtract(center.toVector()).setY(0);
+
+        Vector direction = incoming.lengthSquared() > 1e-6 && outgoing.lengthSquared() > 1e-6
+                ? incoming.normalize().add(outgoing.normalize())
+                : incoming.lengthSquared() > 1e-6 ? incoming : outgoing;
+
+        if (direction.lengthSquared() < 1e-6) return null;
+        return direction.normalize();
+    }
+
+    /**
+     * Rewrites a checkpoint's type in place, keeping its shape, geometry and alternate routes.
+     * <p>
+     * Sector IDs are reassigned 1..N in lap order afterwards. Converting a gate away from SECTOR
+     * would otherwise leave a gap, and converting one back would take {@code max + 1} and land it
+     * behind a gate earlier in the lap — a split-time display that reads "sector 3" then "sector 2".
+     * Since this only runs while the race is idle (see the command's canEditOrder guard), no
+     * in-flight racer is holding sector times against the old numbering.
+     *
+     * @param race the race that owns the checkpoint
+     * @param checkpoint the checkpoint to rewrite
+     * @param target the type to convert to
+     * @return the reloaded checkpoint, or null if the save failed
+     */
+    public Checkpoint convertType(Race race, Checkpoint checkpoint, Checkpoint.Type target) {
+        YamlConfiguration config = race.getConfig();
+        if (config == null) {
+            main.log("§cCheckpoint " + checkpoint.getId() + " of race " + race.getName() + " wasn't converted, see cause above.");
+            return null;
+        }
+        if (checkpoint.getType() == target) return checkpoint;
+
+        String path = "checkpoints." + checkpoint.getId();
+        config.set(path + ".type", target.name());
+
+        //A sector ID on a non-sector gate would keep it in the split-time table; drop it.
+        if (target != Checkpoint.Type.SECTOR) config.set(path + ".sectorID", null);
+
+        renumberSectors(race, config, checkpoint, target);
+
+        try {
+            race.saveConfig();
+        } catch (IOException e) {
+            err("Couldn't convert checkpoint " + checkpoint.getId() + " of race " + race.getName() + " to " + target + " because the it's config threw an error on saving. ", e);
+            return null;
+        }
+
+        loadRaceCheckpoints(race);
+        return race.getCheckpoint(checkpoint.getId());
+    }
+
+    /**
+     * Renumbers every SECTOR checkpoint 1..N in lap order, after {@code converted} has been given
+     * {@code newType} but before the config is saved.
+     */
+    private void renumberSectors(Race race, YamlConfiguration config, Checkpoint converted, Checkpoint.Type newType) {
+        int next = 1;
+        for (Checkpoint checkpoint : race.getCheckpoints()) {
+            Checkpoint.Type type = checkpoint == converted ? newType : checkpoint.getType();
+            String path = "checkpoints." + checkpoint.getId();
+
+            if (type == Checkpoint.Type.SECTOR) {
+                config.set(path + ".sectorID", next);
+                next++;
+            } else {
+                config.set(path + ".sectorID", null);
+            }
+        }
     }
 
     /**
@@ -289,6 +492,9 @@ public class CheckpointManager {
             Map<String, Object> values = section.getValues(true);
             String path = "checkpoints." + (id + 1);
             for (Map.Entry<String, Object> entry : values.entrySet()) {
+                //See renumber(): the section objects in this map would graft the source subtree back
+                //in and leave a cycle behind for the next save to choke on.
+                if (entry.getValue() instanceof ConfigurationSection) continue;
                 config.set(path + "." + entry.getKey(), entry.getValue());
             }
             config.set("checkpoints." + id, null);
@@ -400,9 +606,18 @@ public class CheckpointManager {
         }
 
         for (Checkpoint checkpoint : toAdd) race.addCheckpoint(checkpoint);
-        Vector normal = race.getCheckpoints().getFirst().getNormal();
-        float yaw = (float) Math.toDegrees(Math.atan2(-normal.getX(), normal.getZ()));
-        race.setStartRotation(yaw);
+
+        //The start line's facing decides where boats spawn pointing. Take it from the first PLANE
+        //checkpoint in the race; a BOX checkpoint has no normal, and this used to throw *after* the
+        //checkpoints were already saved, so a retry duplicated the whole set.
+        for (Checkpoint checkpoint : race.getCheckpoints()) {
+            if (checkpoint.getShape() != Checkpoint.Shape.PLANE) continue;
+            Vector normal = checkpoint.getNormal();
+            if (normal == null) continue;
+            float yaw = (float) Math.toDegrees(Math.atan2(-normal.getX(), normal.getZ()));
+            race.setStartRotation(yaw);
+            break;
+        }
         return true;
     }
 
@@ -425,23 +640,67 @@ public class CheckpointManager {
             return false;
         }
 
-        int altIndex = target.getAlternates().size();
-        String path = "checkpoints." + target.getId() + ".alternates." + altIndex;
+        target.addAlternate(center, normal, halfWidth, halfHeight);
 
-        config.set(path + ".center", serializePrecise(center));
-        config.set(path + ".normal", serializeVector(normal));
-        config.set(path + ".halfWidth", halfWidth);
-        config.set(path + ".halfHeight", halfHeight);
+        //Rewrite the whole block from the list rather than appending at `size()`, which would overwrite
+        //a surviving route after one has been removed.
+        config.set("checkpoints." + target.getId() + ".alternates", null);
+        yamlAlternates(config, target);
 
         try {
             race.saveConfig();
         } catch (IOException e) {
             err("Couldn't save alternate route for checkpoint " + target.getId() + " on race " + race.getName() + " because the it's config threw an error on saving. ", e);
+            target.getAlternates().removeLast();
             return false;
         }
 
-        target.addAlternate(center, normal, halfWidth, halfHeight);
         return true;
+    }
+
+    /**
+     * Detaches an alternate route from a checkpoint and persists the change. Without the save the
+     * route reappears on the next reload, since {@code Alternates}<em></em> is only ever written here.
+     * @return true if the route was attached and the resulting list was saved
+     */
+    public boolean removeAlternate(Race race, Checkpoint target, Checkpoint.AlternateRoute alt) {
+        int index = target.getAlternates().indexOf(alt);
+        if (index < 0) return false;
+
+        YamlConfiguration config = race.getConfig();
+        if (config == null) {
+            main.log("§cAlternate route " + index + " of checkpoint " + target.getId() + " on race " + race.getName() + " wasn't removed, see cause above.");
+            return false;
+        }
+
+        Checkpoint.AlternateRoute removed = target.getAlternates().remove(index);
+
+        config.set("checkpoints." + target.getId() + ".alternates", null);
+        yamlAlternates(config, target);
+
+        try {
+            race.saveConfig();
+        } catch (IOException e) {
+            err("Couldn't remove alternate route " + index + " of checkpoint " + target.getId() + " on race " + race.getName() + " because the it's config threw an error on saving. ", e);
+            target.getAlternates().add(index, removed);
+            return false;
+        }
+
+        return true;
+    }
+
+    /** Writes every alternate route of {@code checkpoint} under {@code checkpoints.<id>.alternates}. */
+    private void yamlAlternates(YamlConfiguration config, Checkpoint checkpoint) {
+        List<Checkpoint.AlternateRoute> alternates = checkpoint.getAlternates();
+        for (int i = 0; i < alternates.size(); i++) {
+            Checkpoint.AlternateRoute alt = alternates.get(i);
+            String path = "checkpoints." + checkpoint.getId() + ".alternates." + i;
+
+            config.set(path + ".center", serializePrecise(alt.getCenter()));
+            config.set(path + ".normal", serializeVector(alt.normal));
+            config.set(path + ".halfWidth", alt.getHalfWidth());
+            config.set(path + ".halfHeight", alt.getHalfHeight());
+        }
     }
 
     /**
@@ -486,13 +745,34 @@ public class CheckpointManager {
                 config.getConfigurationSection("checkpoints")
         ).getKeys(false)) {
 
-            int ID = Integer.parseInt(key);
+            //One malformed entry must not abort loading: clearCheckpoints() already ran, so throwing
+            //here would leave the race with no checkpoints at all and stop later races from loading.
+            int ID;
+            try {
+                ID = Integer.parseInt(key);
+            } catch (NumberFormatException e) {
+                main.log("§eSkipping checkpoint '" + key + "' of race " + race.getName() + ": the ID isn't a number.");
+                continue;
+            }
+
             String worldName = config.getString("checkpoints." + key + ".world");
             String shapeString = config.getString("checkpoints." + key + ".shape");
-            Checkpoint.Shape shape = shapeString == null ? Checkpoint.Shape.BOX : Checkpoint.Shape.valueOf(shapeString);
+            Checkpoint.Shape shape;
+            try {
+                shape = shapeString == null ? Checkpoint.Shape.BOX : Checkpoint.Shape.valueOf(shapeString.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                main.log("§eCheckpoint " + key + " of race " + race.getName() + " has unknown shape '" + shapeString + "', treating it as BOX.");
+                shape = Checkpoint.Shape.BOX;
+            }
 
             String typeString = config.getString("checkpoints." + key + ".type");
-            Checkpoint.Type type = typeString == null ? Checkpoint.Type.NORMAL : Checkpoint.Type.valueOf(typeString);
+            Checkpoint.Type type;
+            try {
+                type = typeString == null ? Checkpoint.Type.NORMAL : Checkpoint.Type.valueOf(typeString.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                main.log("§eCheckpoint " + key + " of race " + race.getName() + " has unknown type '" + typeString + "', treating it as NORMAL.");
+                type = Checkpoint.Type.NORMAL;
+            }
 
             Checkpoint checkpoint = null;
 
@@ -548,93 +828,6 @@ public class CheckpointManager {
         race.getCheckpoints().sort(Comparator.comparingInt(Checkpoint::getId));
     }
 
-    /**
-     * Toggles the particle preview on/off. While on, redraws every second until toggled off,
-     * the session ends, or the preview list changes shape drastically.
-     * @return true if the preview is now ON, false if it's now OFF (or couldn't start)
-     */
-    public boolean toggleViewCheckpoints(Player p, Race race) {
-        BukkitTask existing = viewingCheckpoints.remove(p);
-        if (existing != null) {
-            existing.cancel();
-            return false;
-        }
-
-        BukkitTask task = Bukkit.getScheduler().runTaskTimer(main, () -> {
-            if (race.getCheckpoints().isEmpty()) {
-                BukkitTask t = viewingCheckpoints.remove(p);
-                if (t != null) t.cancel();
-                return;
-            }
-            for (Checkpoint c : race.getCheckpoints()) drawCheckpointOutline(c);
-        }, 0L, 20L);
-
-        viewingCheckpoints.put(p, task);
-        return true;
-    }
-
-    private void drawCheckpointOutline(Checkpoint c) {
-        Location center = c.getCenter();
-        Vector right = c.getRight();
-        Vector up = c.getUp();
-        double hw = c.getHalfWidth();
-        double hh = c.getHalfHeight();
-
-        Vector rightHW = right.clone().multiply(hw);
-        Vector upHH = up.clone().multiply(hh);
-
-        Vector topRight = center.toVector().add(rightHW).add(upHH);
-        Vector bottomRight = center.toVector().add(rightHW).subtract(upHH);
-        Vector bottomLeft = center.toVector().subtract(rightHW).subtract(upHH);
-        Vector topLeft = center.toVector().subtract(rightHW).add(upHH);
-
-        Particle particle = switch (c.getType()) {
-            case START_FINISH -> Particle.FLAME;
-            case SECTOR -> Particle.HAPPY_VILLAGER;
-            default -> Particle.END_ROD;
-        };
-
-        drawLine(center.getWorld(), particle, topRight, bottomRight);
-        drawLine(center.getWorld(), particle, bottomRight, bottomLeft);
-        drawLine(center.getWorld(), particle, bottomLeft, topLeft);
-        drawLine(center.getWorld(), particle, topLeft, topRight);
-
-        for (Checkpoint.AlternateRoute alt : c.getAlternates()) {
-            Location altCenter = alt.getCenter();
-            Vector altRight = alt.getRight();
-            Vector altUp = alt.getUp();
-            double altHalfWidth = alt.getHalfWidth();
-            double altHalfHeight = alt.getHalfHeight();
-
-            Vector altRightHW = altRight.clone().multiply(altHalfWidth);
-            Vector altUpHH = altUp.clone().multiply(altHalfHeight);
-
-            Vector altTopRight = altCenter.toVector().add(altRightHW).add(altUpHH);
-            Vector altBottomRight = altCenter.toVector().add(altRightHW).subtract(altUpHH);
-            Vector altBottomLeft = altCenter.toVector().subtract(altRightHW).subtract(altUpHH);
-            Vector altTopLeft = altCenter.toVector().subtract(altRightHW).add(altUpHH);
-
-            Particle altParticle = Particle.CLOUD;
-
-            drawLine(altCenter.getWorld(), altParticle, altTopRight, altBottomRight);
-            drawLine(altCenter.getWorld(), altParticle, altBottomRight, altBottomLeft);
-            drawLine(altCenter.getWorld(), altParticle, altBottomLeft, altTopLeft);
-            drawLine(altCenter.getWorld(), altParticle, altTopLeft, altTopRight);
-        }
-    }
-
-    private void drawLine(org.bukkit.World world, Particle particle, Vector from, Vector to) {
-        double length = from.distance(to);
-        int steps = Math.max(1, (int) (length / 0.4));
-        Vector step = to.clone().subtract(from).multiply(1.0 / steps);
-
-        Vector cursor = from.clone();
-        for (int i = 0; i <= steps; i++) {
-            world.spawnParticle(particle, cursor.getX(), cursor.getY(), cursor.getZ(), 1, 0, 0, 0, 0);
-            cursor.add(step);
-        }
-    }
-
     private int nextId(Race race) {
         return race.getCheckpoints().stream()
                 .mapToInt(Checkpoint::getId)
@@ -657,6 +850,10 @@ public class CheckpointManager {
         int best = -1;
         double bestDist = Double.MAX_VALUE;
         for (Checkpoint c : checkpoints) {
+            //Location#distance throws across worlds, which happens as soon as the player isn't
+            //standing in this race's world.
+            if (!sameWorld(point, c.getCenter())) continue;
+
             double d = c.getCenter().distance(point);
             if (d < bestDist) {
                 bestDist = d;
@@ -721,9 +918,16 @@ public class CheckpointManager {
     }
 
     public int count() {
-        return getAll().size();
+        int total = 0;
+        for (List<Checkpoint> checkpoints : getAll().values()) total += checkpoints.size();
+        return total;
     }
 
+    /**
+     * Lower block corner of the two selections, sorted on every axis. This is the corner as clicked,
+     * not the extent: the YAML stores corners and {@link Checkpoint} widens them on construction, so
+     * files written before that normalization load correctly too.
+     */
     private Location min(Location a, Location b) {
         return new Location(a.getWorld(),
                 Math.min(a.getX(), b.getX()),
@@ -731,6 +935,7 @@ public class CheckpointManager {
                 Math.min(a.getZ(), b.getZ()));
     }
 
+    /** Upper block corner of the two selections, sorted on every axis and not widened. */
     private Location max(Location a, Location b) {
         return new Location(a.getWorld(),
                 Math.max(a.getX(), b.getX()),

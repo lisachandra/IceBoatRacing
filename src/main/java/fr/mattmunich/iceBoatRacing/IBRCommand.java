@@ -4,9 +4,11 @@ import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
+import org.bukkit.util.StringUtil;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -14,6 +16,12 @@ import static fr.mattmunich.iceBoatRacing.Main.c;
 import static fr.mattmunich.iceBoatRacing.Messages.getMessage;
 
 public class IBRCommand implements BasicCommand {
+
+    /**
+     * Follows the lowercase {@code iceboatracing.*} scheme used everywhere else (the old
+     * camelCase {@code iceBoatRacing.reload} was declared nowhere and matched nothing).
+     */
+    public static final String RELOAD_PERMISSION = "iceboatracing.command.reload";
 
     private final Main main;
 
@@ -25,41 +33,28 @@ public class IBRCommand implements BasicCommand {
     public void execute(@NonNull CommandSourceStack source, String @NonNull [] args) {
         CommandSender s = source.getSender();
         if (args.length == 1 && args[0].equalsIgnoreCase("reload")) {
-            if (!s.hasPermission("iceBoatRacing.reload")) return;
+            if (!s.hasPermission(RELOAD_PERMISSION)) {
+                s.sendMessage(getMessage("error.noPermission"));
+                return;
+            }
             s.sendMessage(getMessage("prefix").append(c(" §r§b§oReloading...")));
             Bukkit.getScheduler().runTask(main, () -> {
                 main.reload();
                 s.sendMessage(getMessage("prefix").append(c(" §r§bDone reloading!")));
             });
-
-
         } else if (args.length == 1 && args[0].equalsIgnoreCase("info")) {
-            s.sendMessage(
-                            """
-                            §3---§b Ice Boat Racing §3---
-                            §3Created by§b mattmunich
-                            §3Created for §bGrands Prix§3 by§b Mini Jeux Entre Potes
-                            \s
-                            """
-            );
+            s.sendMessage(getMessage("ibr.info"));
         } else {
-            s.sendMessage(
-                            """
-                            §3---§b /iceboatracing §3---
-                            §3- reload §7- §bReloads the plugin
-                             \
-                            §3- info   §7- §bSome basic info
-                            """
-            );
+            s.sendMessage(getMessage("ibr.help"));
         }
-
     }
-
-
 
     @Override
     public @NonNull Collection<String> suggest(@NonNull CommandSourceStack commandSourceStack, String @NonNull [] args) {
-        return List.of("reload","info");
+        if (args.length <= 1) {
+            return CommandUtil.filter(List.of("reload", "info"), args.length == 0 ? "" : args[0]);
+        }
+        return List.of();
     }
 
     @Override

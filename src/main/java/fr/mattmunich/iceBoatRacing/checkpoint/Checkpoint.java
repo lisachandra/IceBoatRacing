@@ -86,6 +86,13 @@ public class Checkpoint {
 
     final int id; // checkpoint ID in the race order
     int sectorID = -1; // only used for sectors
+
+    /**
+     * The box's extent, as world coordinates. Both are exclusive/inclusive bounds of the volume the
+     * two selected blocks occupy, not the blocks' corners: selecting blocks {@code x=0} and
+     * {@code x=5} yields {@code min.x = 0} and {@code max.x = 6}, so a boat at {@code x=5.4} is inside.
+     * {@link #boxMin(Location, Location)} / {@link #boxMax(Location, Location)} do that conversion.
+     */
     final Location min;
     final Location max;
     final Type type;
@@ -108,10 +115,7 @@ public class Checkpoint {
      * @param max position 2
      */
     public Checkpoint(int id, Location min, Location max) {
-        this.id = id;
-        this.min = min;
-        this.max = max;
-        this.type = Type.NORMAL;
+        this(id, min, max, Type.NORMAL);
     }
 
     /**
@@ -122,8 +126,8 @@ public class Checkpoint {
      */
     public Checkpoint(int id, Location min, Location max, Type type) {
         this.id = id;
-        this.min = min;
-        this.max = max;
+        this.min = boxMin(min, max);
+        this.max = boxMax(min, max);
         this.type = type;
     }
 
@@ -137,9 +141,32 @@ public class Checkpoint {
     public Checkpoint(int id, int sectorID, Location min, Location max) {
         this.id = id;
         this.sectorID = sectorID;
-        this.min = min;
-        this.max = max;
+        this.min = boxMin(min, max);
+        this.max = boxMax(min, max);
         this.type = Type.SECTOR;
+    }
+
+    /**
+     * Lower corner of a box selection, with the two corners sorted on every axis so the click order
+     * doesn't matter.
+     */
+    public static Location boxMin(Location a, Location b) {
+        return new Location(a.getWorld(),
+                Math.min(a.getX(), b.getX()),
+                Math.min(a.getY(), b.getY()),
+                Math.min(a.getZ(), b.getZ()));
+    }
+
+    /**
+     * Upper corner of a box selection. Block locations are the block's minimum corner, so the block
+     * itself extends one full unit past it on each axis — add that back or the outermost block is
+     * only half-covered by the trigger volume.
+     */
+    public static Location boxMax(Location a, Location b) {
+        return new Location(a.getWorld(),
+                Math.max(a.getX(), b.getX()) + 1,
+                Math.max(a.getY(), b.getY()) + 1,
+                Math.max(a.getZ(), b.getZ()) + 1);
     }
 
     /**
@@ -185,8 +212,16 @@ public class Checkpoint {
         return alternates;
     }
 
-    public void removeAlternate(AlternateRoute alternateRoute) {
-        alternates.remove(alternateRoute);
+    /**
+     * Detaches an alternate route from this checkpoint, in memory only. Callers that need the change
+     * to survive a reload must also persist the list — see
+     * {@code CheckpointManager.removeAlternate(Race, Checkpoint, AlternateRoute)}.
+     * @return the index the route occupied, or -1 if it wasn't attached to this checkpoint
+     */
+    public int removeAlternate(AlternateRoute alternateRoute) {
+        int index = alternates.indexOf(alternateRoute);
+        if (index >= 0) alternates.remove(index);
+        return index;
     }
 
     /**

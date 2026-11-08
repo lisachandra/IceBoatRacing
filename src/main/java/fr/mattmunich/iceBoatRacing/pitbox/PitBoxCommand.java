@@ -1,5 +1,6 @@
 package fr.mattmunich.iceBoatRacing.pitbox;
 
+import fr.mattmunich.iceBoatRacing.CommandUtil;
 import fr.mattmunich.iceBoatRacing.race.Race;
 import fr.mattmunich.iceBoatRacing.race.RaceManager;
 import io.papermc.paper.command.brigadier.BasicCommand;
@@ -8,6 +9,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -87,7 +89,9 @@ public class PitBoxCommand implements BasicCommand {
 
                 sender.sendMessage(c(
                         "§3  #" + box.getId() + " §b" + box.getName()
-                                + " §7— §f" + box.getDuration() + "s"
+                                + " §7— §f" + (box.getTaskType() == PitBox.TaskType.CHEST
+                                    ? box.getLootCount() + "x " + box.getLootItem().name()
+                                    : box.getDuration() + "s")
                                 + " §7— §f" + String.join(",", allowedNames)
                                 + " §7— §f" + box.getColor().name()
                                 + " §7 | §f"
@@ -112,7 +116,7 @@ public class PitBoxCommand implements BasicCommand {
             }
             sender.sendMessage(getMessage("pitbox.removed", formatArguments("name", name)));
 
-        } else if (args.length >= 4 && args[0].equalsIgnoreCase("setAllowed")) {
+        } else if (args.length >= 3 && args[0].equalsIgnoreCase("setAllowed")) {
             Race race = raceManager.getRace(args[1]);
             if (race == null) {
                 sender.sendMessage(getMessage("race.notFound"));
@@ -121,6 +125,20 @@ public class PitBoxCommand implements BasicCommand {
 
             PitBox box = getBox(args, race, sender);
             if (box == null) return;
+
+            //No players given: show who the box is currently allowed for
+            if (args.length == 3) {
+                List<String> names = new ArrayList<>();
+                box.getAllowed().forEach(uuid -> {
+                    String name = Bukkit.getOfflinePlayer(uuid).getName();
+                    names.add(name == null ? getStringMessage("playerNotFound") : name);
+                });
+                sender.sendMessage(getMessage("pitbox.setAllowed.current", formatArguments(
+                        "name", box.getName(),
+                        "players", names.isEmpty() ? "*" : String.join(", ", names)
+                )));
+                return;
+            }
 
             List<String> allowedNames = new ArrayList<>(Arrays.asList(args).subList(3, args.length));
             if(allowedNames.getFirst().equals("*")) allowedNames = new ArrayList<>();
@@ -150,7 +168,7 @@ public class PitBoxCommand implements BasicCommand {
                     "players", allowedNames.isEmpty() ? "*" : String.join(", ", allowedNames))
             ));
 
-        } else if (args.length == 4 && args[0].equalsIgnoreCase("setColor")) {
+        } else if (args.length >= 3 && args[0].equalsIgnoreCase("setColor")) {
             Race race = raceManager.getRace(args[1]);
             if (race == null) {
                 sender.sendMessage(getMessage("race.notFound"));
@@ -159,6 +177,15 @@ public class PitBoxCommand implements BasicCommand {
 
             PitBox box = getBox(args, race, sender);
             if (box == null) return;
+
+            //No color given: show the current one
+            if (args.length == 3) {
+                sender.sendMessage(getMessage("pitbox.setColor.current", formatArguments(
+                        "name", box.getName(),
+                        "color", box.getColor().name()
+                )));
+                return;
+            }
 
             PitBoxColor color;
             try {
@@ -175,6 +202,97 @@ public class PitBoxCommand implements BasicCommand {
             }
 
             sender.sendMessage(getMessage("pitbox.setColor.updated", formatArguments("name", box.getName(), "color", color.name())));
+
+        } else if (args.length >= 3 && args[0].equalsIgnoreCase("setTaskType")) {
+            Race race = raceManager.getRace(args[1]);
+            if (race == null) {
+                sender.sendMessage(getMessage("race.notFound"));
+                return;
+            }
+
+            PitBox box = getBox(args, race, sender);
+            if (box == null) return;
+
+            //No type given: show the current one
+            if (args.length == 3) {
+                sender.sendMessage(getMessage("pitbox.setTaskType.current", formatArguments(
+                        "name", box.getName(),
+                        "type", box.getTaskType().name()
+                )));
+                return;
+            }
+
+            PitBox.TaskType taskType;
+            try {
+                taskType = PitBox.TaskType.valueOf(args[3].toUpperCase());
+            } catch (IllegalArgumentException e) {
+                sender.sendMessage(getMessage("pitbox.setTaskType.invalid", formatArguments(
+                        "availableTypes", String.join(", ", Arrays.stream(PitBox.TaskType.values()).map(Enum::name).toList())
+                )));
+                return;
+            }
+
+            boolean success = pitBoxManager.setTaskType(race, box, taskType);
+            if (!success) {
+                sender.sendMessage(getMessage("error.unknown"));
+                return;
+            }
+
+            sender.sendMessage(getMessage("pitbox.setTaskType.updated", formatArguments("name", box.getName(), "type", taskType.name())));
+
+        } else if (args.length >= 3 && args[0].equalsIgnoreCase("setLoot")) {
+            Race race = raceManager.getRace(args[1]);
+            if (race == null) {
+                sender.sendMessage(getMessage("race.notFound"));
+                return;
+            }
+
+            PitBox box = getBox(args, race, sender);
+            if (box == null) return;
+
+            //No values given: show the current loot requirement
+            if (args.length == 3) {
+                sender.sendMessage(getMessage("pitbox.setLoot.current", formatArguments(
+                        "name", box.getName(),
+                        "count", box.getLootCount(),
+                        "item", box.getLootItem().name()
+                )));
+                return;
+            }
+
+            int count;
+            try {
+                count = Integer.parseInt(args[3]);
+            } catch (NumberFormatException e) {
+                sender.sendMessage(getMessage("error.invalidNumber"));
+                return;
+            }
+            if (count < 1 || count > 27) {
+                sender.sendMessage(getMessage("pitbox.setLoot.invalidCount"));
+                return;
+            }
+
+            //Any item works: Bukkit constant, minecraft: id or spaced words
+            Material lootItem = null;
+            if (args.length >= 5) {
+                lootItem = CommandUtil.parseMaterialToken(args[4]);
+                if (lootItem == null) {
+                    sender.sendMessage(getMessage("pitbox.setLoot.invalidItem", formatArguments("item", args[4])));
+                    return;
+                }
+            }
+
+            boolean success = pitBoxManager.setLoot(race, box, count, lootItem);
+            if (!success) {
+                sender.sendMessage(getMessage("error.unknown"));
+                return;
+            }
+
+            sender.sendMessage(getMessage("pitbox.setLoot.updated", formatArguments(
+                    "name", box.getName(),
+                    "count", count,
+                    "item", lootItem == null ? box.getLootItem().name() : lootItem.name()
+            )));
 
         } else {
             sender.sendMessage(getMessage("pitbox.help"));
@@ -208,6 +326,8 @@ public class PitBoxCommand implements BasicCommand {
             suggestions.add("remove");
             suggestions.add("setAllowed");
             suggestions.add("setColor");
+            suggestions.add("setTaskType");
+            suggestions.add("setLoot");
             return suggestions;
         }
 
@@ -250,6 +370,27 @@ public class PitBoxCommand implements BasicCommand {
                 } else if (args.length == 4 && args[3] != null) {
                     List<String> colorNames = Arrays.asList(PitBoxColor.names());
                     StringUtil.copyPartialMatches(args[3], colorNames, suggestions);
+                }
+            }
+            case "settasktype" -> {
+                if (args.length == 2) {
+                    for (Race race : raceManager.races) suggestions.add(race.getName());
+                } else if (args.length == 3) {
+                    suggestRaces(args, pitBoxList, suggestions);
+                } else if (args.length == 4 && args[3] != null) {
+                    List<String> typeNames = Arrays.stream(PitBox.TaskType.values()).map(Enum::name).toList();
+                    StringUtil.copyPartialMatches(args[3], typeNames, suggestions);
+                }
+            }
+            case "setloot" -> {
+                if (args.length == 2) {
+                    for (Race race : raceManager.races) suggestions.add(race.getName());
+                } else if (args.length == 3) {
+                    suggestRaces(args, pitBoxList, suggestions);
+                } else if (args.length == 4) {
+                    return CommandUtil.filter(List.of("1", "3", "5", "8", "12"), args[3]);
+                } else if (args.length == 5) {
+                    return CommandUtil.suggestItemMaterials(args[4]);
                 }
             }
         }

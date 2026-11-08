@@ -1,6 +1,7 @@
 package fr.mattmunich.iceBoatRacing.pitbox;
 
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 
 import java.util.List;
@@ -9,8 +10,10 @@ import java.util.UUID;
 public class PitBox {
 
     public enum TaskType {
-        TIMED
-        // Future: CHEST...
+        /** The boat is held in place for the box's duration. */
+        TIMED,
+        /** The driver hops out and loots a chest inside the box to finish the stop. */
+        CHEST
     }
 
     private final int id;
@@ -18,20 +21,25 @@ public class PitBox {
     private PitBoxColor color;
     private final Location min;
     private final Location max;
-    private final TaskType taskType;
+    private TaskType taskType;
     private final int duration; // seconds, only meaningful for TIMED
+    private int lootCount; // items to loot, only meaningful for CHEST
+    private Material lootItem; // item to loot, only meaningful for CHEST
     private List<UUID> allowed; // player UUIDs
 
-    // Runtime-only occupancy state — never persisted, rebuilt as empty on load.
-    private UUID occupant;
-
     public PitBox(int id, String name, Location min, Location max, TaskType taskType, int duration, List<UUID> allowed, PitBoxColor color) {
+        this(id, name, min, max, taskType, duration, 5, Material.SNOWBALL, allowed, color);
+    }
+
+    public PitBox(int id, String name, Location min, Location max, TaskType taskType, int duration, int lootCount, Material lootItem, List<UUID> allowed, PitBoxColor color) {
         this.id = id;
         this.name = name;
         this.min = min;
         this.max = max;
         this.taskType = taskType;
         this.duration = duration;
+        this.lootCount = lootCount;
+        this.lootItem = lootItem;
         this.allowed = allowed;
         this.color = color;
     }
@@ -67,18 +75,6 @@ public class PitBox {
         this.color = color;
     }
 
-    public boolean isOccupied() {
-        return occupant != null;
-    }
-
-    public UUID getOccupant() {
-        return occupant;
-    }
-
-    public void setOccupant(UUID occupant) {
-        this.occupant = occupant;
-    }
-
     public int getId() {
         return id;
     }
@@ -99,8 +95,28 @@ public class PitBox {
         return taskType;
     }
 
+    public void setTaskType(TaskType taskType) {
+        this.taskType = taskType;
+    }
+
     public int getDuration() {
         return duration;
+    }
+
+    public int getLootCount() {
+        return lootCount;
+    }
+
+    public void setLootCount(int lootCount) {
+        this.lootCount = lootCount;
+    }
+
+    public Material getLootItem() {
+        return lootItem;
+    }
+
+    public void setLootItem(Material lootItem) {
+        this.lootItem = lootItem;
     }
 
     public List<UUID> getAllowed() {

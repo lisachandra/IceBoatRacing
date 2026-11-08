@@ -10,6 +10,7 @@ import fr.mattmunich.iceBoatRacing.pitbox.PitBoxManager;
 import fr.mattmunich.iceBoatRacing.race.*;
 import fr.mattmunich.iceBoatRacing.checkpoint.CheckpointCommand;
 import fr.mattmunich.iceBoatRacing.checkpoint.CheckpointManager;
+import fr.mattmunich.iceBoatRacing.checkpoint.CheckpointPreview;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.kyori.adventure.text.Component;
@@ -22,11 +23,11 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
-
 public final class Main extends JavaPlugin {
     public static String version;
 
     CheckpointManager checkpointManager;
+    CheckpointPreview checkpointPreview;
     CarManager carManager;
     CarCreator carCreator;
     Messages messages;
@@ -86,6 +87,10 @@ public final class Main extends JavaPlugin {
         return raceManager;
     }
 
+    public CheckpointPreview getCheckpointPreview() {
+        return checkpointPreview;
+    }
+
     public RaceManager resetRaceManager() {
         raceManager = null;
         raceManager = new RaceManager(this, carManager, checkpointManager, pitBoxManager, liveScoreManager);
@@ -94,14 +99,16 @@ public final class Main extends JavaPlugin {
 
     private void registerListeners() {
         PluginManager pm = Bukkit.getPluginManager();
-        pm.registerEvents(new CarListener(raceManager),this);
+        pm.registerEvents(new CarListener(this, raceManager, carManager),this);
         pm.registerEvents(new CarCreator(this, raceManager, carManager), this);
         pm.registerEvents(new Connection(this, raceManager, carManager, liveScoreManager),this);
         pm.registerEvents(new RaceListener(raceManager, pitBoxManager, liveScoreManager),this);
         pm.registerEvents(new RaceCreator(this, raceManager,carCreator), this);
         pm.registerEvents(new WorldLoad(this, raceManager), this);
         pm.registerEvents(new PitBoxCreator(this, pitBoxManager), this);
+        pm.registerEvents(pitBoxManager, this);
         pm.registerEvents(new PosSelection(), this);
+        pm.registerEvents(checkpointPreview, this);
     }
 
     public void updateConstants() {
@@ -148,6 +155,7 @@ public final class Main extends JavaPlugin {
         //Preload car and checkpoint manager for racemanager
         carManager = new CarManager();
         checkpointManager = new CheckpointManager(this);
+        checkpointPreview = new CheckpointPreview(this);
         autoTraceManager = new AutoTraceManager(this, checkpointManager);
         pitBoxManager = new PitBoxManager(this);
         liveScoreManager = new LiveScoreManager();
@@ -181,7 +189,7 @@ public final class Main extends JavaPlugin {
             final Commands registrar = event.registrar();
             registrar.register("iceboatracing", "Command to manage the plugin", List.of("ibr"), new IBRCommand(this));
             registrar.register("race", "Command to manage the race", new RaceCommand(this, raceManager,raceCreator));
-            registrar.register("checkpoint", "Command to manage checkpoints", new CheckpointCommand(checkpointManager, raceManager, autoTraceManager, new RaceCreator(this, raceManager, carCreator), liveScoreManager));
+            registrar.register("checkpoint", "Command to manage checkpoints", new CheckpointCommand(checkpointManager, checkpointPreview, raceManager, autoTraceManager, new RaceCreator(this, raceManager, carCreator), liveScoreManager));
             registrar.register("car", "Command to manage cars", new CarCommand(carManager,raceManager,carCreator));
             registrar.register("pitbox", "Command to manage pit boxes", new PitBoxCommand(raceManager, pitBoxManager, pitBoxCreator));
         });
@@ -191,6 +199,7 @@ public final class Main extends JavaPlugin {
     @Override
     public void onDisable() {
         super.onDisable();
+        if (checkpointPreview != null) checkpointPreview.stopAll();
         raceManager.saveAllRaces();
     }
 

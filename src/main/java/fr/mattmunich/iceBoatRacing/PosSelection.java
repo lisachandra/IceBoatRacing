@@ -37,6 +37,7 @@ public class PosSelection implements Listener {
 
         if (event.getAction() == Action.LEFT_CLICK_BLOCK) {
             event.setCancelled(true);
+            clearIfOtherWorld(p, clicked.getLocation(), pos2);
             Location old = pos1.put(p, clicked.getLocation());
             if (pos1.get(p).equals(old)) return;
             p.sendMessage(Messages.getMessage("pos.1", Messages.formatArguments("x", "" + clicked.getX(), "y", "" + clicked.getY(), "z", "" + clicked.getZ())));
@@ -44,9 +45,21 @@ public class PosSelection implements Listener {
 
         if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
             event.setCancelled(true);
+            clearIfOtherWorld(p, clicked.getLocation(), pos1);
             Location old = pos2.put(p, clicked.getLocation());
             if (pos2.get(p).equals(old)) return;
             p.sendMessage(Messages.getMessage("pos.2", Messages.formatArguments("x", "" + clicked.getX(), "y", "" + clicked.getY(), "z", "" + clicked.getZ())));
+        }
+    }
+
+    /**
+     * Drops the opposite corner if it was picked in a different world. A box spanning two worlds
+     * would otherwise be stored with one corner's coordinates and the other corner's world.
+     */
+    private void clearIfOtherWorld(Player p, Location clicked, Map<Player, Location> opposite) {
+        Location other = opposite.get(p);
+        if (other != null && !clicked.getWorld().equals(other.getWorld())) {
+            opposite.remove(p);
         }
     }
 }

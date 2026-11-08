@@ -34,6 +34,22 @@ public class CheckpointGeometry {
      */
     public static final double WIDTH_PADDING = 0.75;
 
+    /**
+     * Half-width of the gate implied by two clicked blocks, measured across the ground.
+     * <p>
+     * Each click is a block's <em>minimum</em> corner, so the selected span is one block longer than
+     * the coordinate difference. Using the raw 3D distance instead (as this used to) makes a gate too
+     * short by half a block per axis, inflates it when the two clicks differ in height, and collapses
+     * to zero when both clicks land on the same block.
+     *
+     * @param padding extra half-width added on top of the clicked span
+     */
+    public static double spanHalfWidth(Location a, Location b, double padding) {
+        double dx = Math.abs(a.getX() - b.getX()) + 1;
+        double dz = Math.abs(a.getZ() - b.getZ()) + 1;
+        return Math.max(Math.hypot(dx, dz) / 2.0 + padding, 0.5);
+    }
+
     // ---------------------------------------------------------------
     // Simplification / resampling
     // ---------------------------------------------------------------

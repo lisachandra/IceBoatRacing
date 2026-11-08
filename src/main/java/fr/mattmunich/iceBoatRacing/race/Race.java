@@ -102,7 +102,39 @@ public class Race {
     }
 
     public void saveConfig() throws IOException {
+        writeToConfig();
         raceManager.saveRaceConfig(this, config);
+    }
+
+    /**
+     * Pushes this race's own fields into its config, so a save actually records them.
+     * <p>
+     * Without this, {@code saveConfig()} only re-wrote whatever was already in the {@link
+     * YamlConfiguration}, and every {@code /race set*} command (lap count, pit stops, start rotation,
+     * lights) plus the rotation the auto-tracer derives from the start line reverted on restart.
+     */
+    public void writeToConfig() {
+        if (config == null) return;
+
+        config.set("name", name);
+        if (world != null) config.set("world", world.getName());
+        config.set("lapCount", lapCount);
+        config.set("requiredPitStops", requiredPitStops);
+        config.set("startRotation", startRotation);
+
+        //Only describe the lights when both corners exist; a half-configured pair would read back
+        //as an enabled light at (0,0,0).
+        if (lights.enabled() && lights.from() != null && lights.to() != null) {
+            config.set("lights.enabled", true);
+            config.set("lights.from.x", lights.from().getBlockX());
+            config.set("lights.from.y", lights.from().getBlockY());
+            config.set("lights.from.z", lights.from().getBlockZ());
+            config.set("lights.to.x", lights.to().getBlockX());
+            config.set("lights.to.y", lights.to().getBlockY());
+            config.set("lights.to.z", lights.to().getBlockZ());
+        } else {
+            config.set("lights.enabled", false);
+        }
     }
 
     public boolean update() {

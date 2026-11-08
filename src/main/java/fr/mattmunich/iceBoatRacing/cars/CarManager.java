@@ -148,6 +148,39 @@ public class CarManager {
         car.setBoat(boat);
     }
 
+    /**
+     * Spawns a fresh boat for {@code car} right where {@code player} is standing (without moving
+     * them), facing where they look, and seats them in it. Used to replace a boat mid-race, e.g.
+     * after it got stuck: the driver dismounts, the old boat is removed and this hands them a
+     * working one on the spot.
+     */
+    public void respawnCar(Car car, Player player) {
+        //No double cars
+        if (car.getBoat() != null) car.destroy();
+
+        Location spot = player.getLocation().clone();
+
+        // Spawn boat
+        Boat boat = (Boat) spot.getWorld().spawnEntity(spot, boatEntityFromMaterial(car.getBoatMaterial()));
+
+        Component customName;
+
+        if(car.getCustomName() == null) customName = c("Race car");
+        else customName = c(car.getCustomName());
+
+        boat.customName(customName);
+
+        Location boatLocation = boat.getLocation();
+
+        setRotation(boatLocation, player.getYaw(), 0F);
+        boat.teleport(boatLocation);
+
+        boat.setInvulnerable(true);
+
+        boat.addPassenger(player);
+        car.setBoat(boat);
+    }
+
     public void saveCar(Race race, UUID owner, Location startingLocation, ItemStack boatItem) {
 
         int id = count(race);

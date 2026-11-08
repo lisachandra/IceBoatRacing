@@ -91,7 +91,7 @@ An interactive, title-guided wizard walks you through:
 
 | Mode               | Shape                                                       | Use Case                          | Creation                                                                         |
 |--------------------|-------------------------------------------------------------|-----------------------------------|----------------------------------------------------------------------------------|
-| **BOX** (legacy)   | Axis-aligned cuboid (min/max corners)                       | Simple straight tracks            | Wooden shovel left/right click two blocks → `/checkpoint create <race> [SECTOR]` |
+| **BOX** (legacy)   | Axis-aligned cuboid (min/max corners)                       | Simple straight tracks            | Wooden shovel left/right click two blocks → `/checkpoint create <race> [id]` |
 | **PLANE** (modern) | Oriented rectangle (center + normal + halfWidth/halfHeight) | Curved, diagonal, elevated tracks | **AutoTrace** or manual via YAML                                                 |
 
 > **PLANE checkpoints** use precise double-precision centers and ray-plane intersection for crossing detection — far more reliable on non-axis-aligned tracks.
@@ -125,7 +125,8 @@ Attach secondary physical gates to any checkpoint — crossing **either** counts
 1. **Start recording** — configurable point spacing (default 3 blocks)
 2. **Drive one full lap** — boat or on foot
 3. **Auto-stops** when you return near the start (configurable threshold)
-4. **Preview** — particle outlines (Flame=Start/Finish, End Rod=Normal, Villager=Sector)
+4. **Preview** — particle outlines (Flame=Start/Finish, End Rod=Normal, Villager=Sector, plus the
+   smoothed centreline). Turns on by itself after an edit
 5. **Edit** — resize/delete individual checkpoints by clicking near them
 6. **Add sectors** — mark split gates with shovel
 7. **Accept** — batch-saves all as PLANE checkpoints in one YAML write
@@ -150,14 +151,21 @@ Attach secondary physical gates to any checkpoint — crossing **either** counts
 
 **Supported boat types:** Oak, Spruce, Birch, Jungle, Acacia, Dark Oak, Mangrove, Cherry, Bamboo, Pale Oak + all chest variants.
 
-Cars spawn automatically on `/race prepare`, teleport owners inside, set invulnerable, apply custom name, and rotate to `race.startRotation` (configurable).
+Cars spawn when the race starts — and only for players who joined the registration
+intermission. Owners who never joined are not teleported or moved into a boat. Spawned boats
+are invulnerable, get the configured custom name, and rotate to `race.startRotation`.
 
 ### 📊 Live Scoreboard
 
-Global objective `live_ice_boat_racing` (sidebar) updates per-player each tick:
+Each racer gets their **own** scoreboard with a sidebar objective; the server's main
+scoreboard is never touched, so non-racers never see a race sidebar. It updates as the racer
+progresses and shows:
 - Current lap / total laps
 - Checkpoint progress within lap
-- Auto-sorts by progress
+- Pit stops completed / required
+
+The sidebar is removed (and the player's previous scoreboard restored) when they finish,
+leave, or when the race ends.
 
 ### 🏁 Race Lights (Optional)
 
@@ -182,7 +190,8 @@ Each race can require racers to complete a configurable number of pit stops befo
 **At race time:**
 
 - Pit box detection is folded into the same `PlayerMoveEvent` loop used for checkpoint crossing — no separate listener re-walking every racing boat each tick.
-- Entering an eligible, unoccupied box freezes the boat (velocity zeroed every tick) for the box's duration — no early exit is possible, since the freeze itself keeps the player inside the trigger volume.
+- Entering an eligible, unoccupied box freezes the boat (snapped back on every move) for the box's duration — the stop can't be skipped: exiting is allowed but just hands the driver a fresh boat in place, and the countdown keeps running until it completes.
+- **Chest task type** (`/pitbox setTaskType <race> <id> chest`): the classic community-style stop. The driver is ejected from the boat, opens the chest placed inside the box zone, and loots the required items from a **full, shuffled grid** — random pit junk pads the remaining slots (per-player GUI; the real chest is only the trigger, so there's no stock to refill or grief). Taking or Q-dropping every required item completes the stop; walking out of the box cancels it, and driving back in restarts it. The box's `duration` is unused in this mode.
 - An adaptive title countdown (`5, 4, 3... Go!`) tracks the box's configured duration, with a rising-pitch pling on completion.
 - Only one player may occupy a given box at a time; a box can be scoped to specific player names (e.g. a 2-driver team) or opened to everyone.
 - Each racetrack a `requiredPitStops` count (`/race setPitStops <race> <amount>`, defaults to 1). Racers who cross the finish line short of that count are automatically **disqualified**, with an immediate broadcast notice and a `DSQ` marker at the bottom of the final standings — below all qualified finishers, in original crossing order.
@@ -235,8 +244,10 @@ All commands require the corresponding permission (see [Permissions](#-permissio
 | Subcommand                          | Description                                                           | Permission                     |
 |-------------------------------------|-----------------------------------------------------------------------|--------------------------------|
 | `/race create`                      | Start interactive race creation wizard (player only)                  | `iceboatracing.race.create`    |
+| `/race prepare [name] [seconds]`    | Open (or close) the registration intermission and broadcast a clickable Join button. Nobody is teleported until the race starts. | `iceboatracing.command.race`   |
+| `/race join [name]`                 | Join an open race. Requires a car registered for that race.           | `iceboatracing.command.race.join` |
+| `/race leave [name]`                | Leave the race you joined; puts you back where you joined from        | `iceboatracing.command.race.join` |
 | `/race start [name]`                | Begin race with 5-second countdown + lights                           | `iceboatracing.command.race`   |
-| `/race prepare [name]`              | Toggle preparation mode (spawn cars, teleport players, set Adventure) | `iceboatracing.command.race`   |
 | `/race end [name]`                  | End race, broadcast final standings                                   | `iceboatracing.command.race`   |
 | `/race delete [name]`               | Permanently delete race and its YAML                                  | `iceboatracing.race.create`    |
 | `/race setLapCount [name] <amount>` | View or change lap count                                              | `iceboatracing.command.race`   |
@@ -245,20 +256,85 @@ All commands require the corresponding permission (see [Permissions](#-permissio
 
 > If only one race exists, `[name]` is optional.
 
+#### Registration intermission
+
+`/race prepare` no longer drags every car owner onto the track. It opens a timed
+registration window and broadcasts an announcement with a clickable **Join** button:
+
+1. An admin runs `/race prepare <race> [seconds]`.
+2. The announcement (and reminders as the clock runs down) appear in chat, each with a
+   clickable `[ Join race ]` button.
+3. Players click it — or run `/race join <race>` — to add themselves. **Nothing happens to
+   them yet**: no teleport, no gamemode change, no boat.
+4. When the window closes, everyone who joined is placed in their boat and the countdown
+   begins. Players who own a car but never joined are left completely alone.
+
+Run `/race prepare` again (or `/race end`) to close the window early. Behaviour is
+controlled by the `race.intermission.*` block in `config.yml`.
+
 ### `/checkpoint` — Checkpoint & Track Management
 
 | Subcommand                              | Description                                             | Permission                         |
 |-----------------------------------------|---------------------------------------------------------|------------------------------------|
-| `/checkpoint create <race> [SECTOR]`    | Save BOX checkpoint from shovel selection (pos1/pos2)   | `iceboatracing.command.checkpoint` |
-| `/checkpoint setFinish <race>`          | Save START_FINISH BOX checkpoint from shovel selection  | `iceboatracing.command.checkpoint` |
-| `/checkpoint remove [race] [id]`        | Remove checkpoint by ID (or nearest to player)          | `iceboatracing.command.checkpoint` |
-| `/checkpoint view <race>`               | Toggle particle preview for all checkpoints in race     | `iceboatracing.command.checkpoint` |
+| `/checkpoint create <race> [id]`        | Save BOX checkpoint from shovel selection (pos1/pos2). With `[id]`, insert at that position and shift the rest up. | `iceboatracing.command.checkpoint` |
+| `/checkpoint create [sector\|finish] <race> [id]` | Save a SECTOR or START_FINISH checkpoint, optionally at a specific ID | `iceboatracing.command.checkpoint` |
+| `/checkpoint override [sector\|finish] <race> <id>` | Replace the checkpoint at `id` in place, keeping its slot in the lap order | `iceboatracing.command.checkpoint` |
+| `/checkpoint renumber <race>`           | Rewrite IDs as a contiguous `1..N` range, closing gaps  | `iceboatracing.command.checkpoint` |
+| `/checkpoint remove <race> <id>`        | Remove checkpoint by ID (or nearest to player with no args). Leaves no gap behind. | `iceboatracing.command.checkpoint` |
+| `/checkpoint view <race>`               | Toggle the particle outline of every checkpoint in that race. Only you see it. Also switches directly if you were viewing another race. | `iceboatracing.command.checkpoint` |
 | `/checkpoint list [page]`               | Paginated list of all checkpoints (clickable remove/TP) | `iceboatracing.command.checkpoint` |
 | `/checkpoint count`                     | Total checkpoint count across all races                 | `iceboatracing.command.checkpoint` |
-| `/checkpoint resetData <player> <race>` | Clear a player's race data (laps, times, sectors)       | `iceboatracing.command.checkpoint` |
+| `/checkpoint resetData <race> <player>` | Clear a player's race data (laps, times, sectors)       | `iceboatracing.command.checkpoint` |
 | `/checkpoint getID <race>`              | Find nearest checkpoint ID to player                    | `iceboatracing.command.checkpoint` |
 | `/checkpoint clearAll <race>`           | **Destructive** — double-run within 10s to confirm      | `iceboatracing.command.checkpoint` |
 | `/checkpoint addAlternate <race> <id>`  | Add alternate route to checkpoint (shovel selection)    | `iceboatracing.command.checkpoint` |
+
+#### Checkpoint IDs are the lap order
+
+A checkpoint's numeric ID **is** its position in the lap: racers must cross them in
+ascending order, and ID `1` must be the `START_FINISH` line. Consequences:
+
+- IDs must be **contiguous**. A gap makes the race impossible to finish, because the next
+  gate is looked up by `index + 1`. `/checkpoint remove` closes the gap automatically, and
+  `/checkpoint renumber` fixes one that already exists.
+- To insert a gate mid-track, pass the target ID to `create` — the existing checkpoints at
+  and after it shift up by one instead of being overwritten:
+  ```
+  /checkpoint create Monaco 7      # new gate becomes #7, old #7 becomes #8, etc.
+  ```
+- To move a gate's geometry without disturbing the order, use `override`:
+  ```
+  /checkpoint override Monaco 7
+  ```
+- ID surgery is refused while a race is preparing, starting or running, so a racer's
+  target can't shift under them mid-lap.
+- A race can only have **one** `START_FINISH` checkpoint. A lap both begins and ends by
+  crossing it, so a second one would be a gate no racer can ever legitimately cross. The
+  first checkpoint of an empty race is always created as `start`/`finish`, whatever subcommand
+  form you used.
+
+#### What the outline shows
+
+`/checkpoint view` and the AutoTrace preview both draw through one renderer, so they look
+the same and both refresh the moment a checkpoint changes rather than on a timer.
+
+- **PLANE** (auto-traced) — the four edges of the crossing face.
+- **BOX** (hand-placed) — a full wireframe of all twelve edges, i.e. the actual trigger volume
+  your two shovel corners enclosed. This is what makes a placement verifiable: you can see
+  which blocks the gate really covers.
+- **Alternates** — a white `CLOUD` rectangle, so a bypass gate is distinguishable from the
+  primary one.
+- Particles are `FLAME` for start/finish, `HAPPY_VILLAGER` for sectors, `END_ROD` otherwise.
+
+Outlines are sent **only to you**. Creating, overriding or renumbering a checkpoint turns the
+preview on for that race if it wasn't already, so you never have to run `view` first. The task
+stops on its own when you disconnect, when the race is deleted or its world unloads, and on
+`/iceboatracing reload`.
+
+**BOX geometry is inclusive of the blocks you clicked.** Selected blocks are stored as a
+volume, not as two corner points, so a gate built on blocks `x=0..5` triggers anywhere in
+`[0, 6)` — including the far half of the last block, which older versions missed. `/checkpoint
+list` prints and teleports you to the center of that volume.
 
 #### AutoTrace Subcommands
 
@@ -284,6 +360,8 @@ All commands require the corresponding permission (see [Permissions](#-permissio
 | `/pitbox remove <race> <id>`                | Remove a pit box                                                                   | `iceboatracing.command.pitbox` |
 | `/pitbox setAllowed <race> <id> <names\|*>` | Change which players may use a pit box                                             | `iceboatracing.command.pitbox` |
 | `/pitbox setColor <race> <id> <color>`      | Change a pit box's color/team livery                                               | `iceboatracing.command.pitbox` |
+| `/pitbox setTaskType <race> <id> <timed\|chest>` | Switch between a timed hold and a chest-loot stop (see below)                 | `iceboatracing.command.pitbox` |
+| `/pitbox setLoot <race> <id> <items> [material]` | Items a chest stop requires (default 5× Snowball)                            | `iceboatracing.command.pitbox` |
 
 ### `/car` — Car/Boat Management
 
@@ -291,8 +369,8 @@ All commands require the corresponding permission (see [Permissions](#-permissio
 |-----------------------------------------|-----------------------------------------------------------------------|-----------------------------|
 | `/car create`                           | Interactive car registration (spawn block → owner → boat item → race) | `iceboatracing.command.car` |
 | `/car list [page]`                      | Paginated list of all cars (clickable remove/TP/changeOwner)          | `iceboatracing.command.car` |
-| `/car remove <id> <race>`               | Delete a car                                                          | `iceboatracing.command.car` |
-| `/car changeOwner <id> <race> <player>` | Reassign car ownership                                                | `iceboatracing.command.car` |
+| `/car remove <race> <id>`               | Delete a car (alias: `/car delete`)                                   | `iceboatracing.command.car` |
+| `/car changeOwner <race> <id> <player>` | Reassign car ownership                                                | `iceboatracing.command.car` |
 | `/car selectRace <race>`                | Select race for car creation (used by wizard)                         | `iceboatracing.command.car` |
 
 ### `/ibr` or `/iceboatracing` — Plugin Control
@@ -336,14 +414,17 @@ race:
   # Allow players to rejoin mid-race after logout
   allowRejoin: true
 
-  # Gamemode during race (ADVENTURE recommended; SURVIVAL/CREATIVE possible)
-  racingGameMode: ADVENTURE
+  # Put players back where they joined the race once they leave or finish.
+  # Not persisted: after a restart, the world spawn is used instead.
+  teleportBackAfterRace: true
 
-  # Prevent checkpoint detection if player not in racingGameMode
-  enforceRacingGameMode: true
-
-  # Put finishers in spectator mode
-  spectateOnFinish: true
+  # Registration intermission: /race prepare announces a clickable Join
+  # button and only players who click it take part.
+  intermission:
+    seconds: 120          # how long registration stays open
+    autoStart: true       # start when the window closes (false = admin starts manually)
+    minRacers: 1          # refuse to start below this many joined players
+    reminderSeconds: [60, 30, 10]   # when to repeat the Join button
 
   # Remove player's car on logout
   removeCarWhenLoggingOut: false
@@ -363,7 +444,7 @@ race:
 
 **Notes:**
 - `lights.from`/`to` default to `123456789` — if unchanged, lights are **disabled** regardless of `enabled: true`.
-- `racingGameMode`: `SPECTATOR` will not work (players can't control boats).
+- The plugin **never changes a player's gamemode**. Racers keep whatever mode they arrived in, which is what makes this usable on a survival server. (The old `racingGameMode` / `enforceRacingGameMode` / `spectateOnFinish` keys are gone; leaving them in an existing config file is harmless.)
 - **Pit stops are not configured in `config.yml`** — they're per-race (`requiredPitStops`, set via `/race setPitStops`) and per-box (location, duration, allowed players, color, set via `/pitbox create`/`setAllowed`/`setColor`), living in each race's own YAML like checkpoints and cars.
 
 ### `paper-plugin.yml` (embedded in JAR)
@@ -419,24 +500,27 @@ Pit Box Creation (PitBoxCreator) — separate flow, run any time after the race 
 
 ### Race Execution (`RaceManager` + `RaceListener`)
 
-1. **`/race prepare`** → `prepareRace()`
-   - Sets `preparingRace = true`
-   - For each car: `CarManager.spawnCar()` → spawns invulnerable boat, sets custom name, rotates, adds passenger
-   - Creates `Racer` per player, initializes lap/sector tracking
-   - Adds to global `live_ice_boat_racing` scoreboard
+1. **`/race prepare`** → `openRegistration()`
+   - Sets `preparingRace = true` and broadcasts a clickable Join announcement
+   - Runs a countdown with reminders; nobody is teleported or gamemode-switched
+   - `/race join` → `joinRace()`: creates a `Racer`, captures their return location, requires a
+     registered car. Still no teleport, no boat, no gamemode change.
 
-2. **`/race start`** → `startRace()`
+2. **`/race start`** → `startRace()` (automatic when the intermission ends)
+   - Refuses to start with an empty roster
+   - For each *joined* racer: `CarManager.spawnCar()` → spawns invulnerable boat, sets custom
+     name, rotates, adds passenger
    - 6-tick countdown (5→4→3→2→1→GO!) with titles, sounds, optional lights
    - Sets `hasRaceStarted = true`
 
 3. **`RaceListener.onMove()`** (every `PlayerMoveEvent` in a boat)
-   - Validates: in vehicle, is boat, has race data, correct gamemode
+   - Validates: in vehicle, is boat, has race data, racer still active
    - **Segment-ray intersection** against `nextCheckpoint` (and `next+1` for skip tolerance)
    - `Checkpoint.crosses(from, to)` handles both BOX (slab intersection) and PLANE (ray-plane) + alternates
    - On `START_FINISH`:
       - Lap 0 → set `startTime`
       - Lap < total → `onCompleteLap()` (broadcast, title, best-lap check, scoreboard update)
-      - Lap == total → `onFinishRace()` (ranking, gaps, stats, spectate/cleanup, disqualification check)
+      - Lap == total → `onFinishRace()` (ranking, gaps, stats, teleport back, disqualification check)
    - On `SECTOR` → record sector split, broadcast
    - **Pit box check** runs right after the checkpoint loop, reusing the same `Racer` lookup — no second listener re-iterating racing boats:
       - Skip if `pitStopsCompleted >= requiredPitStops` (already done) or the player is mid-stop (`pittingBox != null`)
@@ -517,9 +601,11 @@ Or reloaded from file by using `/ibr reload`.
 # → For each car: break spawn block → type owner name → hold boat → "save"
 # → Type "save" when done
 
-# 2. Prepare & start
-/race prepare Monaco
-/race start Monaco
+# 2. Open registration, then start
+/race prepare Monaco 300    # 5-minute registration window, announces a Join button
+# players click [ Join race ] in chat, or run /race join Monaco
+# the race starts automatically when the window closes
+# (or run /race start Monaco yourself at any point)
 ```
 
 ### Add Sector Gates After AutoTrace
@@ -614,8 +700,29 @@ Set `startRotation` in the race's config file (degrees: 0=South, 90=West, 180=No
 </details>
 
 <details>
-<summary><strong>Players can't cross checkpoints — "Illegal GameMode!" in action bar.</strong></summary>
-Check `race.enforceRacingGameMode` and `race.racingGameMode` in `config.yml`. During prepare/start, players are set to `ADVENTURE` by default. If your server forces another gamemode, either disable enforcement or match the config.
+<summary><strong>I can't see the checkpoint particles.</strong></summary>
+Run <code>/checkpoint view &lt;race&gt;</code>. It only draws for the player who ran the command —
+other players nearby see nothing by design. If you still see nothing, check you're within 64 blocks
+of the gates and in the race's world. Note that a race with zero checkpoints closes the preview
+immediately, so build at least one first.
+</details>
+
+<details>
+<summary><strong>Checkpoints aren't registering for a player.</strong></summary>
+Check the player actually joined the race — only players on the roster are processed. It is
+normal for them to have no boat before the race starts: joining does not move them. Also
+confirm the track's IDs are contiguous (<code>/checkpoint list</code>, or run
+<code>/checkpoint renumber &lt;race&gt;</code>); a gap silently stops all progress because the
+next gate is looked up by <code>index + 1</code>.
+</details>
+
+<details>
+<summary><strong>How do I run a race on a survival server without disrupting everyone?</strong></summary>
+Use the registration intermission: <code>/race prepare &lt;race&gt;</code> only announces a
+clickable Join button. Players opt in, and the plugin never changes anyone's gamemode — racers
+keep the mode they arrived in, and non-racers are never teleported. Each racer is put back
+where they joined when they leave or finish (<code>race.teleportBackAfterRace</code>), and the
+live sidebar is per-player, so it never appears for the rest of the server.
 </details>
 
 <details>
@@ -635,7 +742,7 @@ Copy the `plugins/IceBoatRacing/races/` folder (each `.yml` is a self-contained 
 
 <details>
 <summary><strong>Can I have multiple races running simultaneously?</strong></summary>
-Yes — `RaceManager.activeRaces` supports multiple concurrent races. Each has its own scoreboard entries (same objective, different scores). `/race start/prepare/end` accept a race name to target a specific one.
+Yes — `RaceManager.activeRaces` supports multiple concurrent races. Each racer gets their own per-player sidebar, so two races can run at once without their standings colliding, and non-racers keep whatever scoreboard they had. `/race start/prepare/end` accept a race name to target a specific one.
 </details>
 
 <details>
@@ -712,7 +819,9 @@ src/main/java/fr/mattmunich/iceBoatRacing/
 │   └── RaceData.java         # Per-player runtime data (laps, sectors, times, pit stops, DSQ)
 ├── checkpoint/
 │   ├── Checkpoint.java       # BOX/PLANE geometry, alternates, crossing logic
-│   ├── CheckpointManager.java# Checkpoint persistence + particle preview
+│   ├── CheckpointManager.java# Checkpoint persistence
+│   ├── CheckpointRenderer.java # Particle outlines, shape-aware, per-viewer
+│   ├── CheckpointPreview.java# /checkpoint view sessions + lifecycle
 │   ├── CheckpointCommand.java# /checkpoint + AutoTrace UI
 │   ├── CheckpointGeometry.java# RDP simplify, resample, recenter, plane build
 │   └── autotrace/
@@ -731,7 +840,7 @@ src/main/java/fr/mattmunich/iceBoatRacing/
 │   ├── CarManager.java        # Car persistence + spawning
 │   ├── CarCommand.java        # /car command
 │   ├── CarCreator.java        # Interactive car registration
-│   └── CarListener.java       # Prevent exit, lock movement in prepare
+│   └── CarListener.java       # Countdown exit lock, grid/pit freeze, mid-race exit replaces the boat
 └── listeners/
     ├── Connection.java       # Player join/quit during races
     └── WorldLoad.java        # (Unused, reserved)

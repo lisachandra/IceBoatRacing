@@ -52,9 +52,20 @@ checkpoint:
   inserted: "§aCheckpoint §2%id%§a inserted, the following checkpoints were shifted up"
   overridden: "§aCheckpoint §2%id%§a was replaced"
   renumbered: "§aRenumbered §2%count%§a checkpoints of race §3%race%§a into a contiguous range"
+  renumber:
+    usage: "§cUsage: /checkpoint renumber <raceName>"
+  shape:
+    usage: "§cUsage: /checkpoint shape <raceName> <checkpointID> <plane|box>"
+    already: "§cCheckpoint §4%id%§c is already a §4%shape%§c checkpoint."
+    converted: "§aCheckpoint §2%id%§a converted to a §2%shape%§a checkpoint"
+  type:
+    usage: "§cUsage: /checkpoint type <raceName> <checkpointID> <normal|sector|finish>"
+    already: "§cCheckpoint §4%id%§c is already type §4%type%§c."
+    converted: "§aCheckpoint §2%id%§a is now type §2%type%§a §7(sector ID: §f%sectorID%§7)"
   sectorSaved: "§aSector §e%sectorID% §asaved!"
   idOutOfRange: "§cID must be between §4%min%§c and §4%max%§c."
   startFinishRequired: "§cCheckpoint §41§c must be the start/finish line.\n§8ℹ Use §f/checkpoint create finish <raceName> 1 §8or pick another ID."
+  finishAlreadyExists: "§cRace §4%race%§c already has a start/finish line. A lap is only completed by crossing that one gate, so there can't be a second."
   raceBusy: "§cCan't change checkpoint IDs for race §4%race%§c while it is preparing, starting or running."
   removed: "§aCheckpoint §6%id%§a removed"
   count: "§aThere are %count% checkpoints"
@@ -68,15 +79,20 @@ checkpoint:
 
   #Main /checkpoint help
   help: "§3--------- §b§l/checkpoint§r §3---------
-  \n§3->§a list §8-§7 List all checkpoints
+  \n§3->§a list [page] §8-§7 List all checkpoints
   \n§3->§a count §8-§7 Show the checkpoint count
-  \n§3->§a create [sector|finish] <raceName> §8-§7 Create a checkpoint
-  \n§3->§a autotrace start|stop|preview|sector|add|resize|delete|accept|cancel §8-§7 Auto-trace the track
+  \n§3->§a create [sector|finish] <raceName> [id] §8-§7 Create a checkpoint
+  \n§3->§a override [sector|finish] <raceName> <id> §8-§7 Replace a checkpoint
+  \n§3->§a autotrace start|stop|preview|configure|confirm|sector|add|resize|delete|accept|cancel §8-§7 Auto-trace the track
   \n§3->§a addAlternate <raceName> <checkpointID> §8-§7 Add an alternate route
+  \n§3->§a shape <raceName> <checkpointID> <plane|box> §8-§7 Convert a checkpoint's shape
+  \n§3->§a type <raceName> <checkpointID> <normal|sector|finish> §8-§7 Convert a checkpoint's type
+  \n§3->§a renumber <raceName> §8-§7 Close gaps in the checkpoint order
   \n§3->§a view <raceName> §8-§7 Toggle checkpoint visibility
-  \n§3->§a remove|delete [raceName] [checkpointID] §8-§7 Remove a checkpoint
+  \n§3->§a remove|delete <raceName> <checkpointID> §8-§7 Remove a checkpoint §7(no args = nearest)
   \n§3->§a clearAll <raceName> §8-§7 Remove all checkpoints
-  \n§3->§a resetData <player> <raceName> §8-§7 Reset a player's score
+  \n§3->§a resetData <raceName> <player> §8-§7 Reset a player's score
+  \n§3->§a getID <raceName> §8-§7 Show the nearest checkpoint's ID
   "
 
 
@@ -89,13 +105,16 @@ checkpoint:
   view:
     "on": "§bCheckpoint visibility for race §3%race%§b: §aenabled"
     "off": "§bCheckpoint visibility for race §3%race%§b: §cdisabled"
+    switched: "§bCheckpoint visibility for race §3%race%§b: §aenabled §7(switched from the previous race)"
 
   #Auto-trace (recording/generation) commands
   autotrace:
     help: "§3--------- §b§l/checkpoint autotrace§r §3---------
-    \n§3->§a start <raceName> [spacing] [width] [height] [loop|noloop] §8-§7 Start recording
+    \n§3->§a start <raceName> [--create] §8-§7 Start recording
     \n§3->§a stop §8-§7 Stop recording
     \n§3->§a preview §8-§7 Toggle the preview
+    \n§3->§a configure <width|height|spacing|loop> <value> §8-§7 Edit the settings
+    \n§3->§a confirm §8-§7 Confirm the auto-trace settings
     \n§3->§a sector §8-§7 Mark a sector
     \n§7§oℹ Click 2 blocks with the shovel first
     \n§3->§a add §8-§7 Add a manual checkpoint
@@ -105,10 +124,11 @@ checkpoint:
     \n§3->§a delete §8-§7 Remove a checkpoint
     \n§7§oℹ Stand near the checkpoint to remove
     \n§3->§a accept §8-§7 Save the generated checkpoints
-    \n§3->§a cancel §8-§7 Cancel the session
+    \n§3->§a cancel [--noRestart] §8-§7 Cancel the session
     "
 
-    usageStart: "§cUsage: /checkpoint autotrace start <raceName> [spacing] [width] [height] [loop|noloop]"
+    usageStart: "§cUsage: /checkpoint autotrace start <raceName> [--create]"
+    usageConfigure: "§cUsage: /checkpoint autotrace configure <width|height|spacing|loop> <value>"
     started: "§aRecording started for race §f%race%§a. Ride or walk the full lap of the track.\n§8ℹ Recording stops automatically once you return near the starting point, or run §f/checkpoint autotrace stop §8manually."
     noSession: "§cYou don't have an active auto-trace session."
     notEnoughPoints: "§cNot enough points recorded to generate checkpoints. Try again."
@@ -170,7 +190,7 @@ race:
 
   #Registration intermission: players opt in instead of everyone being teleported
   intermission:
-    announce: "§b§l🏁 Race %race% §r§7— §f%laps% laps\n§7Registration closes in §f%seconds%s§7. Click below to take part.\n§7Effects and your gamemode are untouched."
+    announce: "§b§l🏁 Race %race% §r§7— §f%laps% laps\n§7Registration closes in §f%seconds%s§7. Click below to take part.\n§8§oℹ Effects and your gamemode are untouched.\n%join%"
     joinButton: "§a§l[ Join race ]"
     joinButtonHover: "§7Click to join. Requires a registered car."
     countdown: "§b%race%§7 — §f%seconds%s§7 left to join §8(%count% joined)"
@@ -216,18 +236,25 @@ race:
 
   #Help message
   help: "§3--------- §b§l/race§r §3---------
-  \n§3->§a prepare [name] [seconds] §8-§7 Open/close race registration
+  \n§3->§a create §8-§7 Create a race (interactive)
+  \n§3->§a info <race> §8-§7 Show the race's configuration
+  \n§3->§a prepare <race> [seconds] §8-§7 Open/close race registration
   \n§7§oℹ Announces a clickable Join button in chat
-  \n§3->§a join [name] §8-§7 Join an open race
-  \n§3->§a leave [name] §8-§7 Leave the race you joined
-  \n§3->§a start [name] §8-§7 Start the race
-  \n§3->§a end [name] §8-§7 End the race
-  \n§3->§a delete [name] §8-§7 Delete the race
-  \n§3->§a setLapCount [name] <number> §8-§7 Set the lap count
-  \n§3->§a setStartRotation [name] <0-360 or n/w/s/e> §8-§7 Set the starting angle
-  \n§3->§a setPitStops [name] <number> §8-§7 Set the number of required pit stops
-  \n§3->§a setLights [name] §8-§7 Set the starting lights
+  \n§3->§a join <race> §8-§7 Join an open race
+  \n§3->§a leave <race> §8-§7 Leave the race you joined
+  \n§3->§a start <race> §8-§7 Start the race
+  \n§3->§a end <race> §8-§7 End the race
+  \n§3->§a remove|delete <race> §8-§7 Delete the race
+  \n§3->§a setLapCount <race> [number] §8-§7 Set the lap count §7(no number = show current)
+  \n§3->§a setStartRotation <race> [degrees|n/e/s/w] §8-§7 Set the starting angle
+  \n§3->§a setPitStops <race> [number] §8-§7 Set the number of required pit stops
+  \n§3->§a setLights <race> §8-§7 Set the starting lights §7(with the shovel)
   "
+
+  #/race info overview
+  infoHeader: "§3--------- §b§l%race%§r §3---------"
+  infoCars: "§bRegistered cars: §3%count%"
+  infoPitBoxes: "§bPit boxes: §3%count%"
 
   #In race events
   onCompleteLap:
@@ -346,20 +373,39 @@ pitbox:
     title: "§c§l%seconds%"
     subtitle: "§7pit stop in progress..."
     go: "§a§lGo!"
+  chest:
+    title: "§b§lPit stop §7— loot §f%count%× %item%"
+    instruction: "§7Hop out of your boat and open the chest: take §f%count%× %item%§7 to finish the stop."
+    left: "§cPit stop cancelled — you left the box. §7Drive back in to restart it."
+    noChest: "§e⚠ No chest found inside this pit box zone (or on top of it) yet!\n§8ℹ Place one in the marked zone — it's detected as soon as you open it."
+    actionBar: "§b%remaining%§7 item(s) left to loot"
   noPitBoxes: "§cNo pit boxes defined for this race."
   invalid: "§cInvalid pit box number"
   removed: "§aPit box §6%name%§a removed"
   setAllowed:
+    current: "§bPit box §f%name%§b is allowed for: §3%players%"
     updated: "§aPit box §f%name%§a updated, allowed for: §3%players%"
   setColor:
+    current: "§bPit box §f%name%§b color: §f%color%"
     updated: "§aPit box §f%name%§a color set to §f%color%"
     invalid: "§cInvalid color. Choices: §f%availableColors%"
+  setTaskType:
+    current: "§bPit box §f%name%§b task type: §f%type%"
+    updated: "§aPit box §f%name%§a task type set to §f%type%"
+    invalid: "§cInvalid task type. Choices: §f%availableTypes%"
+  setLoot:
+    current: "§bPit box §f%name%§b requires §f%count%× %item%§b per stop."
+    updated: "§aPit box §f%name%§a now requires §f%count%× %item%§a per stop."
+    invalidCount: "§cThe item count must be between §41§c and §427§c."
+    invalidItem: "§cUnknown item: §4%item%§c."
   help: "§3--------- §b§l/pitbox§r §3---------
   \n§3->§a create <raceName> §8-§7 Create a pit box
   \n§3->§a list <raceName> §8-§7 List pit boxes
-  \n§3->§a remove <raceName> <id> §8-§7 Remove a pit box
-  \n§3->§a setAllowed <raceName> <id> <players...|*> §8-§7 Set allowed players
-  \n§3->§a setColor <raceName> <id> <color> §8-§7 Set the pit box color
+  \n§3->§a remove|delete <raceName> <id> §8-§7 Remove a pit box
+  \n§3->§a setAllowed <raceName> <id> [players...|*] §8-§7 Set allowed players §7(no value = show current)
+  \n§3->§a setColor <raceName> <id> [color] §8-§7 Set the pit box color
+  \n§3->§a setTaskType <raceName> <id> [timed|chest] §8-§7 Hold the boat in place, or loot a chest to finish
+  \n§3->§a setLoot <raceName> <id> [items] [material] §8-§7 Set what a chest pit stop requires §7(any item id)
   "
 
   create:
@@ -407,10 +453,10 @@ car:
 
   #Help message
   help: "§3--------- §b§l/car§r §3---------
-  \n§3->§a create §8-§7 Create a car
+  \n§3->§a create §8-§7 Create a car (interactive)
   \n§3->§a list [page] §8-§7 List all cars
-  \n§3->§a changeOwner <id> <raceName> <player> §8-§7 Change a car's owner
-  \n§3->§a remove <id> <raceName> §8-§7 Remove a car
+  \n§3->§a changeOwner <raceName> <id> <player> §8-§7 Change a car's owner
+  \n§3->§a remove|delete <raceName> <id> §8-§7 Remove a car
   \n§3->§a selectRace <raceName> §8-§7 Select the race for car creation
   "
 
@@ -455,3 +501,11 @@ error:
   playerToExecuteCommand: "§cYou must be a player to do this."
   noPermission: "§cYou don't have permission to do this."
   unknown: "§cAn unknown error occurred. Check the console for an error message."
+
+#Plugin root command (/iceboatracing, /ibr)
+ibr:
+  help: "§3--------- §b§l/iceboatracing§r §3---------
+  \n§3->§a reload §8-§7 Reload the plugin's configuration
+  \n§3->§a info §8-§7 Some basic info
+  "
+  info: "§3---§b Ice Boat Racing §3---\n§3Created by§b mattmunich\n§3Created for §bGrands Prix§3 by§b Mini Jeux Entre Potes"

@@ -32,6 +32,10 @@ permissions:
       iceboatracing.command.race: true
       iceboatracing.command.race.join: true
       iceboatracing.command.plugin: true
+      iceboatracing.command.reload: true
+  iceboatracing.command.reload:
+    description: Allows reloading the plugin with /iceboatracing reload
+    default: op
   iceboatracing.command.race:
     description: The permission for the /race command
     default: op
