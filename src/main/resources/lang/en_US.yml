@@ -263,6 +263,9 @@ race:
     message: "§3%player%§b §8§l>>§r§b lap #§3%ID%§b completed in §3%time%§b"
     messageBestLapTimeYet: "§3%player% §8§l>>§b lap §3%ID%§b completed in §3%time%§b §7-§f new record time!"
   onCrossSector: "§r§3%player%§b §8§l>>§r§b sector §3%ID%§b: §3%time%§b"
+  onCrossGate:
+    #Shown on the driver's action bar when they cross a gate, so a missed one is noticeable
+    actionBar: "§a✓ §bGate §3%id%§b/§3%total%"
   onFinish:
     message: "§2%player%§b finished the race in §2%time%§a and is ranked §2#%ranking%§a!"
     title: "§2Race finished!"

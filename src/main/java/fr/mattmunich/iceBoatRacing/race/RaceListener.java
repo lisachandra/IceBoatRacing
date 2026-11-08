@@ -109,6 +109,11 @@ public class RaceListener implements Listener {
                 racer.checkpointIndex+=2;
 //                main.liveSidebar.getScore(player).setScore(((racer.lapCount-1) * race.getCheckpoints().size()) + racer.checkpointIndex);
                 liveScoreManager.updateRacer(racer);
+
+                player.sendActionBar(getMessage("race.onCrossGate.actionBar", formatArguments(
+                        "id", "" + afterNextCheckpoint.getId(),
+                        "total", "" + race.getCheckpoints().size()
+                )));
                 break;
             }
 
@@ -126,6 +131,13 @@ public class RaceListener implements Listener {
             racer.checkpointIndex++;
 //            main.liveSidebar.getScore(player).setScore(((racer.lapCount-1) * race.getCheckpoints().size()) + racer.checkpointIndex);
             liveScoreManager.updateRacer(racer);
+
+            //Normal gates are otherwise silent: ping the driver's progress so a missed gate is
+            //noticeable (their gate counter simply stops ticking up)
+            player.sendActionBar(getMessage("race.onCrossGate.actionBar", formatArguments(
+                    "id", "" + nextCheckpoint.getId(),
+                    "total", "" + race.getCheckpoints().size()
+            )));
         }
 
         handlePitBox(player, racer, race, to);
