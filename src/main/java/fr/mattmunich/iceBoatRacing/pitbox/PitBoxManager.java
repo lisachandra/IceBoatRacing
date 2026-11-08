@@ -13,6 +13,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Chest;
+import org.bukkit.block.DoubleChest;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -402,17 +403,16 @@ public class PitBoxManager implements Listener {
     }
 
     /**
-     * Finds the first chest (or trapped chest) placed inside the box's zone — or directly on top
-     * of it, since chests usually sit on the marked floor — or null.
+     * Finds the first chest (or trapped chest) in or near the box's zone, or null. The scan is
+     * widened by {@link #SESSION_MARGIN}: chests sit on the marked floor (a block above the
+     * zone) or on workbenches next to it, and all of those should count.
      */
     private @Nullable Chest findChestInZone(PitBox box) {
         World world = box.getMin().getWorld();
         if (world == null) return null;
-        //The Y scan goes one block above the zone: a chest standing on the zone's floor is
-        //outside the strict cuboid but is still "in the box" for every practical purpose
-        for (int x = box.getMin().getBlockX(); x <= box.getMax().getBlockX(); x++) {
-            for (int y = box.getMin().getBlockY(); y <= box.getMax().getBlockY() + 1; y++) {
-                for (int z = box.getMin().getBlockZ(); z <= box.getMax().getBlockZ(); z++) {
+        for (int x = box.getMin().getBlockX() - SESSION_MARGIN; x <= box.getMax().getBlockX() + SESSION_MARGIN; x++) {
+            for (int y = box.getMin().getBlockY() - SESSION_MARGIN; y <= box.getMax().getBlockY() + SESSION_MARGIN; y++) {
+                for (int z = box.getMin().getBlockZ() - SESSION_MARGIN; z <= box.getMax().getBlockZ() + SESSION_MARGIN; z++) {
                     if (world.getBlockAt(x, y, z).getState() instanceof Chest chest) return chest;
                 }
             }
@@ -468,11 +468,18 @@ public class PitBoxManager implements Listener {
         if (session == null || !session.isChest()) return;
 
         InventoryHolder holder = e.getInventory().getHolder();
-        if (!(holder instanceof Chest chest)) return;
-        //Any chest in the session's box triggers the GUI — either half of a double chest, and one
-        //block above the zone too. Matching by zone (not by a stored location) also means the
-        //chest can be placed, moved or replaced at any point during the session.
-        if (!isChestInZone(session.box, chest.getLocation())) return;
+
+        //A double chest's inventory holder is a DoubleChest, not a Chest block state — without
+        //handling it, opening either half of a double chest never opens the loot GUI
+        Location chestLocation = null;
+        if (holder instanceof Chest chest) chestLocation = chest.getLocation();
+        else if (holder instanceof DoubleChest doubleChest) chestLocation = doubleChest.getLocation();
+        if (chestLocation == null) return;
+        //Any chest near the session's box triggers the GUI — either half of a double chest, one
+        //on the floor above the zone, one on a neighboring workbench. Matching by area (not by a
+        //stored location) also means the chest can be placed, moved or replaced at any point
+        //during the session.
+        if (!isNearBox(session.box, chestLocation)) return;
 
         e.setCancelled(true);
         if (session.lootGui == null) session.lootGui = createLootGui(session);
@@ -482,14 +489,6 @@ public class PitBoxManager implements Listener {
             if (sessions.get(player.getUniqueId()) != session) return;
             player.openInventory(gui);
         });
-    }
-
-    /** True if {@code loc} is inside the box zone, or directly on top of its highest face. */
-    private boolean isChestInZone(PitBox box, Location loc) {
-        if (box.contains(loc)) return true;
-        return loc.getBlockX() >= box.getMin().getBlockX() && loc.getBlockX() <= box.getMax().getBlockX()
-                && loc.getBlockZ() >= box.getMin().getBlockZ() && loc.getBlockZ() <= box.getMax().getBlockZ()
-                && loc.getBlockY() == box.getMax().getBlockY() + 1;
     }
 
     @EventHandler
@@ -539,14 +538,29 @@ public class PitBoxManager implements Listener {
     }
 
     /**
+     * How far outside the marked zone a session still counts as "in the pit". The stop triggers
+     * while the driver is in the boat (low Y), and being ejected puts them beside or on top of
+     * the boat — often outside a tight one-block-tall zone — so a strict containment check would
+     * cancel the session the instant they dismount, before they ever reach the chest.
+     */
+    private static final int SESSION_MARGIN = 3;
+
+    /** True if {@code loc} is inside the box zone or within {@link #SESSION_MARGIN} of it. */
+    private boolean isNearBox(PitBox box, Location loc) {
+        return loc.getX() >= box.getMin().getX() - SESSION_MARGIN && loc.getX() <= box.getMax().getX() + SESSION_MARGIN
+                && loc.getY() >= box.getMin().getY() - SESSION_MARGIN && loc.getY() <= box.getMax().getY() + SESSION_MARGIN
+                && loc.getZ() >= box.getMin().getZ() - SESSION_MARGIN && loc.getZ() <= box.getMax().getZ() + SESSION_MARGIN;
+    }
+
+    /**
      * Called on every move while a CHEST session is running (the driver is on foot, so this is
-     * invoked from {@code RaceListener} before its in-vehicle gate). Walking out of the box
-     * abandons the stop; driving back in starts a fresh one.
+     * invoked from {@code RaceListener} before its in-vehicle gate). Actually leaving the pit
+     * area abandons the stop; driving back in starts a fresh one.
      */
     public void handleChestSessionMove(Player player, Location to) {
         PitSession session = sessions.get(player.getUniqueId());
         if (session == null || !session.isChest()) return;
-        if (session.box.contains(to)) return;
+        if (isNearBox(session.box, to)) return;
 
         releaseSession(player, session, true);
     }
